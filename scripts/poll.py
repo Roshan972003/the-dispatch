@@ -7,7 +7,10 @@ httpx.post(base + "/deleteWebhook")
 off = None
 print("polling... Ctrl+C to stop", flush=True)
 while True:
-    r = httpx.get(base + "/getUpdates", params={"timeout": 25, "offset": off}, timeout=40).json()
+    try:
+        r = httpx.get(base + "/getUpdates", params={"timeout": 25, "offset": off}, timeout=40).json()
+    except httpx.HTTPError as e:      # network blip: keep polling
+        print("poll error, retrying:", type(e).__name__, flush=True); time.sleep(2); continue
     for u in r.get("result", []):
         off = u["update_id"] + 1
         try: telegram.handle_update(u)
