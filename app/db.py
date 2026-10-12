@@ -37,6 +37,9 @@ CREATE TABLE IF NOT EXISTS style_guide (
 CREATE TABLE IF NOT EXISTS edits (
   id INTEGER PRIMARY KEY AUTOINCREMENT, article_id INTEGER, gemini_draft TEXT, shreya_edit TEXT, created_at TEXT, promoted INTEGER DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS email_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, kind TEXT, issue_id INTEGER, recipient_hash TEXT, link TEXT
+);
 CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT);
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, kind TEXT, detail TEXT
@@ -44,6 +47,7 @@ CREATE TABLE IF NOT EXISTS events (
 """
 PG_SCHEMA = SCHEMA.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
 
+MIGRATIONS = [("articles", "signal", "INTEGER"), ("articles", "signal_filter", "TEXT"), ("issue_items", "entities", "TEXT"), ("subscribers", "unsub_reason", "TEXT")]   # columns added after first release
 _READY = False
 
 @contextmanager
@@ -62,6 +66,11 @@ def conn():
             c.execute(PG_SCHEMA)
         else:
             c.executescript(SCHEMA)
+        for t, col, typ in MIGRATIONS:
+            if PG:
+                c.execute(f"ALTER TABLE {t} ADD COLUMN IF NOT EXISTS {col} {typ}")
+            elif col not in {r[1] for r in c.execute(f"PRAGMA table_info({t})")}:
+                c.execute(f"ALTER TABLE {t} ADD COLUMN {col} {typ}")
         _READY = True
     try:
         yield c

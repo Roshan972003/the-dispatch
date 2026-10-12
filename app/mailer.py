@@ -144,14 +144,14 @@ def subscribe(email, confirmed=False):
                    f"Confirm your subscription: {link}")
     return {"ok": True, "message": "Check your inbox to confirm." if not confirmed else "Added."}
 
-def set_status_by_token(token, status):
+def set_status_by_token(token, status, reason=None):
     with db.conn() as c:
         s = db.one(c, "SELECT * FROM subscribers WHERE token=?", (token,))
         if not s:
             return None
         if s["status"] in ("bounced", "complained") and status == "active":
             return s
-        db.run(c, "UPDATE subscribers SET status=?, status_changed_at=? WHERE id=?", (status, now(), s["id"]))
+        db.run(c, "UPDATE subscribers SET status=?, status_changed_at=?, unsub_reason=COALESCE(?, unsub_reason) WHERE id=?", (status, now(), reason, s["id"]))
         db.log(c, status, s["email"])
         return s
 
@@ -190,4 +190,9 @@ def handle_webhook(evt):
             set_status_by_email(to, "bounced", (data.get("bounce") or {}).get("message", "hard bounce"))
     elif kind == "email.complained":
         set_status_by_email(to, "complained", "spam complaint")
+    elif kind in ("email.delivered", "email.opened", "email.clicked"):
+        tag = next((t.get("value") for t in (data.get("tags") or []) if isinstance(t, dict) and t.get("name") == "issue"), None) if isinstance(data.get("tags"), list) else (data.get("tags") or {}).get("issue")
+        with db.conn() as c:
+            db.run(c, "INSERT INTO email_events (ts, kind, issue_id, recipient_hash, link) VALUES (?,?,?,?,?)",
+                   (now(), kind, int(tag) if str(tag or "").isdigit() else None, hashlib.sha256(to.lower().encode()).hexdigest()[:16], (data.get("click") or {}).get("link")))
     return {"ok": True}

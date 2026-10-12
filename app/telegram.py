@@ -61,14 +61,22 @@ def send_draft(issue_id=None):
     say("When you are happy with the draft:", reply_markup=confirm_buttons(issue["id"]))
     return {"issue_id": issue["id"], "stories": len(items)}
 
-def send_reminder():
-    """Wed 10 PM IST: nudge if the draft is still unconfirmed."""
+def send_reminder(force=False):
+    """Wed 10 PM IST: nudge if the draft is still unconfirmed. Honours a dashboard snooze; force=True is the manual ping."""
+    from datetime import datetime
     with db.conn() as c:
         issue = db.one(c, "SELECT * FROM issues WHERE week=?", (config.week_start(),))
-        if not issue or issue["status"] != "drafted" or issue["reminder_sent"]:
+        if not issue or issue["status"] != "drafted":
             return {"skipped": issue["status"] if issue else "no issue"}
+        if not force:
+            if issue["reminder_sent"]:
+                return {"skipped": "already reminded"}
+            snooze = db.kv_get(c, "snooze_until")
+            if snooze and datetime.fromisoformat(snooze) > config.now_ist():
+                return {"skipped": f"snoozed until {snooze}"}
         db.run(c, "UPDATE issues SET reminder_sent=1 WHERE id=?", (issue["id"],))
-        db.log(c, "reminder", f"issue {issue['id']}")
+        db.run(c, "DELETE FROM kv WHERE k='snooze_until'")
+        db.log(c, "reminder", f"issue {issue['id']}" + (" (manual ping)" if force else ""))
     say("⏰ <b>Reminder:</b> this week's Dispatch draft is still waiting for your confirmation. "
         "Nothing will be sent until you confirm.", reply_markup=confirm_buttons(issue["id"]))
     return {"reminded": issue["id"]}

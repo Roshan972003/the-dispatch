@@ -20,6 +20,14 @@ def thursday_send():
     if not issue:
         return {"skipped": "no issue this week"}
     if issue["status"] in ("approved", "sending"):
+        from app import linkcheck
+        try:        # pre-flight: tell Shreya about dead links or paywalls, then send what she confirmed
+            lc = linkcheck.run(issue["id"])
+            if lc["problems"]:
+                bad = "\n".join(f"• #{r['position']} {r['state']} ({r['status']}): {r['title'][:70]}" for r in lc["rows"] if r["state"] != "ok")
+                telegram.say(f"🔗 <b>Pre-flight link check:</b> {lc['problems']} of {len(lc['rows'])} links need a look.\n{bad}\nThe issue is still going out as confirmed.")
+        except Exception:
+            pass
         return mailer.send_issue(issue["id"])
     if issue["status"] == "drafted":
         telegram.say("⚠️ It's Thursday morning and the draft is <b>not confirmed</b>, so nothing was sent. "

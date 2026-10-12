@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi import FastAPI, Request, HTTPException, Depends, Form
 from fastapi.responses import HTMLResponse
 from app import config, db
 
@@ -79,13 +79,15 @@ def confirm(t: str):
 
 @app.get("/unsubscribe", response_class=HTMLResponse)
 def unsubscribe_page(t: str):
-    return PAGE % (f'<h1>Unsubscribe?</h1><p>You will stop receiving The Dispatch.</p><form method="post" action="/unsubscribe?t={t}"><button>Yes, unsubscribe</button></form>')
+    opts = "".join(f'<label style="display:block;margin:6px 0;font:15px sans-serif"><input type="radio" name="reason" value="{v}"> {v}</label>' for v in
+                   ["Too many emails", "Not relevant to me", "I never signed up", "Other"])
+    return PAGE % (f'<h1>Unsubscribe?</h1><p>You will stop receiving The Dispatch. Optional: tell us why.</p><form method="post" action="/unsubscribe?t={t}" style="display:block">{opts}<button style="margin-top:14px">Yes, unsubscribe</button></form>')
 
 @app.post("/unsubscribe", response_class=HTMLResponse)
-def unsubscribe(t: str):
+def unsubscribe(t: str, reason: str = Form(None)):
     """Handles both the confirm button and the mail client's one-click List-Unsubscribe POST."""
     from app import mailer
-    s = mailer.set_status_by_token(t, "unsubscribed")
+    s = mailer.set_status_by_token(t, "unsubscribed", (reason or None) and reason[:60])
     return PAGE % ("<h1>You're unsubscribed.</h1><p>Sorry to see you go.</p>" if s else "<h1>Link not recognised.</h1>")
 
 # ---------------- Resend webhook (bounces, complaints) ----------------
