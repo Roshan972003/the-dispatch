@@ -83,5 +83,6 @@ Useful scripts: `scripts/import_subscribers.py` (import Shreya's real list as ac
 - **Vercel Hobby cron** runs each job at some point in the hour after its scheduled time, so "10 PM" is 10 to 11 PM and "Wednesday 2 PM" is 2 to 3 PM IST. Never early.
 - **Open and click analytics** are wired to Resend webhooks but stay empty (nothing is estimated) until mail goes out from a verified domain.
 - **GDELT** (one of the news APIs) allows one request per 5 seconds and often refuses Vercel's shared servers. The system retries, and if it is still refused it skips GDELT for that run and says so in the Sources tab. Every other source is unaffected.
-- **Engagement panel:** shows clearly labelled sample numbers until real opens and clicks arrive from Resend.
+- **Engagement panel:** shows a clearly labelled **projection** for the full list (based on the brief's 38% open rate; estimates, not measurements). Real deliveries, opens and clicks from Resend appear in a separate "Measured so far" block as they arrive.
+- **Send mode:** while the sender is Resend's test address, a send goes to the account owner plus 25 sample addresses; the dashboard's launchpad and send log say so ("Test mode").
 - Voice notes and button rewrites take a few seconds because they call Gemini.

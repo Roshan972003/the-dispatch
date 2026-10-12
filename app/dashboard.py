@@ -286,6 +286,8 @@ def state(fresh=False):
         {"label": "Email provider key present", "ok": bool(config.RESEND_API_KEY), "detail": "Resend"},
         {"label": "Bounce and complaint webhook secured", "ok": bool(config.RESEND_WEBHOOK_SECRET), "detail": "signature verified"},
     ]
+    if "resend.dev" in (config.RESEND_FROM or ""):
+        checks.append({"label": "Send mode", "ok": True, "detail": "Test mode: delivers to the account owner plus 25 sample addresses until a domain is verified"})
     launchpad = {"armed": all(c["ok"] for c in checks), "confirmed": is_confirmed, "checks": checks,
                  "headline": ("ARMED: sends Thursday 8:00 AM IST" if status == "approved" else "SENT" if status == "sent" else "SENDING" if status == "sending" else "ARMED") if all(c["ok"] for c in checks)
                              else "SAFE: nothing can send until you confirm"}
