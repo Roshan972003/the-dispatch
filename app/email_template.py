@@ -38,7 +38,7 @@ CSS = """<style>
 body,table,td{-webkit-text-size-adjust:100%}a{color:inherit}
 @media (max-width:620px){.wrap{padding:0 !important}.card{border-radius:0 !important}.pad{padding-left:22px !important;padding-right:22px !important}.mast{font-size:38px !important}.hd{font-size:23px !important}.take{font-size:17px !important}.num{font-size:34px !important}.btn{display:block !important;margin:0 0 8px !important;text-align:center !important}}
 @media (prefers-color-scheme:dark){body,.bg{background:#0d0c0a !important}.card{background:#171512 !important}.ink{color:#f3efe6 !important}.mut{color:#a8a195 !important}.rule{border-color:#2c2923 !important}
-.takebox{background:#211e18 !important}.lk{color:#e8b64c !important}.pill{border-color:#3a352c !important;color:#c9c2b3 !important}.btn{background:#211e18 !important;color:#f3efe6 !important;border-color:#3a352c !important}.edit{background:#1d1a15 !important}.head{background:#000 !important}.foot{background:#0f0e0c !important}}
+.takebox{background:#211e18 !important}.lk{color:#e8b64c !important}.pill{border-color:#3a352c !important;color:#c9c2b3 !important}.btn{background:#211e18 !important;color:#f3efe6 !important;border-color:#3a352c !important}.edit{background:#1d1a15 !important}.takebox{border-color:#3a352c !important}.btn2{background:#211e18 !important;border-color:#4a4333 !important}.head{background:#000 !important}.foot{background:#0f0e0c !important}}
 </style>"""
 
 def render(issue, items, token="preview"):
@@ -72,14 +72,14 @@ def render(issue, items, token="preview"):
         stories.append(
             f'<tr><td class="pad rule" style="padding:34px 44px 6px;border-top:1px solid #ece5d4">'
             f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
-            f'<td width="58" valign="top" class="num lk" style="font:400 40px/1 {F};color:{GOLD};width:58px">{n:02d}</td>'
+            f'<td width="66" valign="top" class="num lk" style="font:400 48px/1 {F};color:{GOLD};width:66px">{n:02d}</td>'
             f'<td valign="top" style="padding-top:6px"><span class="pill" style="display:inline-block;padding:4px 12px;border:1px solid #dccfae;border-radius:999px;font:700 10.5px {S};letter-spacing:.12em;text-transform:uppercase;color:{GOLD2}">{h(it["topic"] or "")}</span></td></tr></table>'
-            f'<div style="padding:14px 0 16px"><a href="{h(it["url"])}" style="text-decoration:none;color:{INK};font:700 26px/1.25 {F};letter-spacing:-.01em" class="hd ink">{h(_clip(it["title"], 150))}</a></div>'
-            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td class="takebox" style="background:#faf5e8;border-radius:12px;padding:18px 22px 20px">'
+            f'<div style="padding:14px 0 16px"><a href="{h(it["url"])}" style="text-decoration:none;color:{INK};font:700 28px/1.22 {F};letter-spacing:-.015em" class="hd ink">{h(_clip(it["title"], 150))}</a></div>'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td class="takebox" style="background:#fffaf0;border:1px solid #ecdfbf;border-left:4px solid #c9a24a;border-radius:6px 14px 14px 6px;padding:16px 24px 22px">'
             f'<div style="font:700 10.5px {S};letter-spacing:.16em;text-transform:uppercase;color:{GOLD2};margin-bottom:10px" class="lk"><span style="display:inline-block;width:22px;height:2px;background:{GOLD};vertical-align:middle;margin-right:8px"></span>Shreya’s take</div>'
-            f'<div style="font:19px/1.65 {F};color:#2b2823" class="take ink">{h(it["commentary"] or "")}</div></td></tr></table>'
+            f'<div style="font:700 54px/.7 {F};color:#d4a94a;height:26px" aria-hidden="true">&ldquo;</div><div style="font:19px/1.68 {F};color:#2b2823" class="take ink">{h(it["commentary"] or "")}</div></td></tr></table>'
             f'<div style="padding:14px 0 0;font:14px/1.5 {S};color:{MUT}" class="mut">{h(it["source"])} &nbsp;·&nbsp; '
-            f'<a href="{h(it["url"])}" style="color:{GOLD2};font-weight:700;text-decoration:none" class="lk">Read the full story →</a>{alt}</div></td></tr>')
+            f'<a href="{h(it["url"])}" style="display:inline-block;margin-left:6px;padding:7px 16px;border:1px solid #d9c089;border-radius:999px;color:{GOLD2};font-weight:700;text-decoration:none;background:#fffdf6" class="lk btn2">Read the full story →</a>{alt}</div></td></tr>')
 
     shares = "".join(f'<a href="{h(u)}" class="btn" style="display:inline-block;margin:0 8px 8px 0;padding:10px 18px;border:1px solid #dccfae;border-radius:999px;background:#fffdf8;color:{INK};text-decoration:none;font:600 13px {S}">{h(k)}</a>'
                      for k, u in share_links().items())
@@ -89,7 +89,7 @@ def render(issue, items, token="preview"):
             f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="bg" style="background:#ece7da"><tr><td align="center" class="wrap" style="padding:30px 12px">'
             f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="card" style="max-width:660px;background:#fffdf8;border-radius:18px;overflow:hidden">'
             # masthead band
-            f'<tr><td align="center" class="head pad" style="background:#14120f;padding:46px 36px 40px">'
+            f'<tr><td align="center" class="head pad" style="background:#14120f;padding:50px 36px 44px;border-top:4px solid #d4a94a;border-bottom:1px solid #3a3122">'
             f'<div style="font:700 11px {S};letter-spacing:.32em;text-transform:uppercase;color:#d4a94a">Weekly &nbsp;·&nbsp; Thursday edition</div>'
             f'<div class="mast" style="font:700 50px/1.05 {F};letter-spacing:-.02em;color:#f6f0e1;margin-top:16px">The Dispatch</div>'
             f'<div style="width:44px;height:2px;background:#d4a94a;margin:20px auto 18px;line-height:2px;font-size:2px">&nbsp;</div>'

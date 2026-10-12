@@ -156,6 +156,43 @@ h3,.rc h4{font:700 11.5px var(--sans);letter-spacing:.14em}
 .rc{border-radius:18px;box-shadow:var(--shadow)}.rc .cm{font-size:18px}
 table{font-size:14px}th{font-size:11.5px;letter-spacing:.1em}
 .pbox{border-radius:18px}
+
+/* ---- Premium pass 2: refined surfaces, stage tracker, motion ---- */
+::selection{background:rgba(212,169,74,.35)}
+html{scrollbar-color:#cdbf9c transparent}
+body{font-feature-settings:"tnum" 1,"cv11" 1;letter-spacing:-.003em}
+header::after{content:"";display:block;height:1px;background:linear-gradient(90deg,transparent,rgba(212,169,74,.7),transparent)}
+header .brand::before{content:"D";display:inline-grid;place-items:center;width:34px;height:34px;margin-right:12px;border-radius:10px;background:linear-gradient(135deg,#E6C36A,#A9791F);color:#1a1100;font:700 19px var(--serif);vertical-align:2px;box-shadow:0 4px 14px rgba(212,169,74,.35)}
+main>*{animation:rise .45s cubic-bezier(.2,.7,.2,1) both}@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){main>*{animation:none}}
+.card{border-radius:22px;padding:30px;border:1px solid var(--line);position:relative}
+[data-theme=light] .card{background:linear-gradient(180deg,#FFFFFF,#FFFCF5);border-color:#E9E0CB}
+.card h2{font-size:27px;letter-spacing:-.015em}
+.card h2::before{content:"";display:block;width:34px;height:3px;border-radius:3px;background:linear-gradient(90deg,#D4A94A,#A9791F);margin-bottom:14px}
+.card.kpi h2::before{display:none}
+.kpi{padding:24px 24px 20px}.kpi .v{font-size:46px;color:var(--ink);background:linear-gradient(180deg,var(--ink),color-mix(in srgb,var(--ink) 70%,#A9791F));-webkit-background-clip:text;background-clip:text}
+.kpi::before{content:"";position:absolute;left:24px;top:0;width:36px;height:3px;border-radius:0 0 3px 3px;background:#D4A94A}
+.act{border-radius:999px;transition:transform .15s,box-shadow .15s,border-color .15s}.act:hover{transform:translateY(-1px);box-shadow:0 8px 18px -10px rgba(60,44,10,.45)}
+.pill{border-radius:999px}
+.rc{transition:transform .2s,box-shadow .2s}.rc:hover{transform:translateY(-2px);box-shadow:0 24px 44px -24px rgba(60,44,10,.35)}
+.ap{transition:transform .2s}.ap:hover{transform:translateY(-2px)}
+tr:hover td{background:rgba(184,134,43,.05)}
+/* hero with stage tracker */
+.hero{padding:42px 44px 34px;border-radius:26px;background:radial-gradient(900px 340px at 105% -20%,rgba(212,169,74,.30),transparent 60%),linear-gradient(135deg,#100E0B 0%,#241D12 100%);border:1px solid rgba(212,169,74,.35);box-shadow:0 30px 60px -30px rgba(40,28,6,.6)}
+.hero::after{display:none}
+.hero h1{font-size:42px;line-height:1.12;letter-spacing:-.02em;max-width:820px}
+.hero .stats{margin-top:30px;padding-top:26px;border-top:1px solid rgba(255,255,255,.12);gap:48px}
+.hero .stats b{font-size:44px;letter-spacing:-.02em;background:linear-gradient(180deg,#fff,#E4C77C);-webkit-background-clip:text;background-clip:text;color:transparent}
+.trk{display:flex;align-items:flex-start;margin-top:34px;position:relative;z-index:1}
+.trk .st{flex:1;position:relative;text-align:left;padding-right:10px}
+.trk .st::before{content:"";position:absolute;left:30px;right:6px;top:13px;height:2px;background:rgba(255,255,255,.16)}
+.trk .st:last-child::before{display:none}
+.trk .st.done::before{background:#D4A94A}
+.trk .dt{position:relative;z-index:1;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font:700 12px var(--sans);background:#241D12;border:2px solid rgba(255,255,255,.28);color:#B9B09C}
+.trk .done .dt{background:#D4A94A;border-color:#D4A94A;color:#1a1100}.trk .now .dt{border-color:#D4A94A;color:#E4C77C;box-shadow:0 0 0 6px rgba(212,169,74,.2)}
+.trk b{display:block;margin-top:12px;font:700 14.5px var(--sans);color:#F6F0E1}.trk span{display:block;font:13px/1.45 var(--sans);color:#B9B09C;margin-top:3px;max-width:190px}
+.trk .now b{color:#E4C77C}
+@media(max-width:900px){.trk{flex-direction:column;gap:18px}.trk .st::before{display:none}.hero h1{font-size:30px}.hero .stats{gap:26px}}
 </style></head><body>
 <header><div class="bar"><div class="brand">The Dispatch<small>Shreya’s editorial desk</small></div><span class="sp"></span><span class="pill" id="wk"></span><span class="pill" id="st"></span><button class="act sm" id="kbtn" style="font-family:var(--mono)" title="Command palette">⌘K</button><button class="ibtn" id="theme" title="Light / dark">◐</button></div>
 <div class="banner" id="banner"></div><nav id="tabs"></nav></header>
@@ -231,8 +268,9 @@ function command(){
    drafted:['Your draft is ready. Review it in Telegram.','Ten stories, each with a take in your voice. Keep, swap or edit any of them, then confirm. Nothing goes to subscribers until you do.'],
    approved:['You’ve confirmed this issue.','It goes to your subscribers on Thursday at 8:00 AM IST. You can still reopen it in Telegram until then.'],
    sending:['Sending now.','The issue is going out to your subscribers.'],sent:['This issue has gone out.','Delivered to your active subscribers. Next week’s collection starts Monday.']}[S.issue?S.issue.status:'collecting']||['This week’s issue',''];
-  const hero=`<div class="hero"><div class="eyebrow">Week of ${esc(S.week)}</div><h1>${HD[0]}</h1><p>${HD[1]}</p><div class="stats"><div><b>${k.articles_week}</b><span>articles read this week</span></div><div><b>${k.selected}</b><span>stories in the draft</span></div><div><b>${k.duplicates}</b><span>repeats filtered out</span></div><div><b>${k.subscribers}</b><span>active subscribers</span></div></div></div>
-  <div class="how"><div><i>1</i><b>Collect</b><span>Mon to Wed: news feeds and APIs, no repeats.</span></div><div><i>2</i><b>Pick &amp; write</b><span>Wed: Gemini chooses 10 stories and drafts your take.</span></div><div><i>3</i><b>You confirm</b><span>In Telegram. Nothing is sent without your yes.</span></div><div><i>4</i><b>Send</b><span>Thursday 8 AM IST to your subscribers.</span></div></div><div style="height:18px"></div>`;
+  const ix={collecting:0,drafted:2,approved:3,sending:3,sent:4}[st]??0;
+  const hero=`<div class="hero"><div class="eyebrow">Week of ${esc(S.week)}</div><h1>${HD[0]}</h1><p>${HD[1]}</p><div class="stats"><div><b>${k.articles_week}</b><span>articles read this week</span></div><div><b>${k.selected}</b><span>stories in the draft</span></div><div><b>${k.duplicates}</b><span>repeats filtered out</span></div><div><b>${k.subscribers}</b><span>active subscribers</span></div></div><div class="trk">${[['Collect','Mon to Wed: feeds and news APIs, repeats removed.'],['Pick &amp; write','Wed: Gemini chooses 10 stories and drafts your take.'],['You confirm','In Telegram. Nothing is sent without your yes.'],['Send','Thursday 8 AM IST to your subscribers.']].map((x,i)=>`<div class="st ${i<ix?'done':i===ix?'now':''}"><div class="dt">${i<ix?'✓':i+1}</div><b>${x[0]}</b><span>${x[1]}</span></div>`).join('')}</div></div>
+  <div style="height:18px"></div>`;
   return hero+`<div class="card"><h2>Approval status</h2><p class="sub">The Wednesday evening pipeline, live from the database.</p><div class="appr">${ap}</div></div>
   <div class="card" style="margin-top:16px"><h2>From ${S.funnel[0].n} articles to ${S.kpis.selected} stories</h2><p class="sub">Read it top to bottom. Each bar shows how many stories are left after that step. The “All articles” tab lists every article with the reason it was kept or dropped.</p>${funnel()}</div>
   <div class="card" style="margin-top:16px"><h2>This week’s pipeline</h2><p class="sub">Monday to Wednesday collection, Wednesday selection, your confirmation, Thursday delivery.</p><div class="steps">${steps}</div></div>
