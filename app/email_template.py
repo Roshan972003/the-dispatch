@@ -20,6 +20,10 @@ def share_links(week=None):
             "LinkedIn": f"https://www.linkedin.com/sharing/share-offsite/?url={quote(base)}",
             "Email a friend": f"mailto:?subject={quote('Worth a read: The Dispatch')}&body={quote(msg + chr(10) + chr(10) + base)}"}
 
+def _clip(t, n):
+    t = " ".join((t or "").split())
+    return t if len(t) <= n else t[:n].rsplit(" ", 1)[0].rstrip(",;:-– ") + "…"
+
 def _unique(items):
     """Safety net: an edition never shows the same story twice (same link, or near-identical headline)."""
     out, seen_urls, fps = [], set(), []
@@ -50,7 +54,7 @@ def render(issue, items, token="preview"):
     F = "Georgia,'Times New Roman',serif"; S = "-apple-system,'Segoe UI',Helvetica,Arial,sans-serif"
 
     toc = "".join(f'<tr><td style="padding:5px 0;font:600 14px {S};color:#b45309;width:26px;vertical-align:top" class="lk">{i["position"]}</td>'
-                  f'<td style="padding:5px 0;font:15px/1.4 {F};vertical-align:top" class="ink">{h(i["title"])}</td></tr>' for i in items)
+                  f'<td style="padding:5px 0;font:15px/1.4 {F};vertical-align:top" class="ink">{h(_clip(i["title"], 105))}</td></tr>' for i in items)
     stories = []
     for n, it in enumerate(items, 1):
         walled = it.get("access") in ("soft", "hard", "dead")
@@ -60,7 +64,7 @@ def render(issue, items, token="preview"):
             f'<tr><td style="padding:30px 0 6px;border-top:1px solid #e8e2d4" class="rule">'
             f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="font:700 13px {S};letter-spacing:.08em;text-transform:uppercase;color:#b45309" class="lk">'
             f'{n:02d} &nbsp;·&nbsp; {h(it["topic"] or "")}</td></tr>'
-            f'<tr><td style="padding:8px 0 14px"><a href="{h(it["url"])}" style="text-decoration:none;color:#1c1917;font:700 26px/1.25 {F}" class="hd ink">{h(it["title"])}</a></td></tr>'
+            f'<tr><td style="padding:8px 0 14px"><a href="{h(it["url"])}" style="text-decoration:none;color:#1c1917;font:700 26px/1.25 {F}" class="hd ink">{h(_clip(it["title"], 150))}</a></td></tr>'
             f'<tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td class="takebox" style="background:#fbf6ea;border-left:4px solid #f59e0b;border-radius:0 10px 10px 0;padding:16px 18px">'
             f'<div style="font:700 11px {S};letter-spacing:.1em;text-transform:uppercase;color:#92400e;margin-bottom:6px" class="lk">Shreya’s take</div>'
             f'<div style="font:19px/1.6 {F};color:#292524" class="take ink">{h(it["commentary"] or "")}</div></td></tr></table></td></tr>'
