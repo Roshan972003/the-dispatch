@@ -320,12 +320,12 @@ def state(fresh=False):
     for row in list(arts) + list(items):          # shown as "you" on screen; the stored value stays "Added by Shreya" because the selector keys on it
         if row.get("source") == "Added by Shreya":
             row["source"] = "Added by you"
-    funnel = [{"label": "Ingested", "n": n_total, "note": "RSS feeds, Google News and 3 news APIs"},
-              {"label": "After de-duplication", "n": n_total - counts.get("dup", 0), "note": f"{counts.get('dup', 0)} dropped as duplicates ({dup_in_week} in-week, {dup_past} already in the last four issues)"},
-              {"label": "Pre-screened by Gemini", "n": n_scored, "note": "every candidate headline gets a 0 to 100 editorial signal"},
-              {"label": "Shortlisted", "n": n_short, "note": "the top 90 go to the full editorial pass (max 14 per source)"},
-              {"label": "Strong signal (60+)", "n": n_strong, "note": "of the shortlist"},
-              {"label": "Picked", "n": len(sel), "note": f"{len(extras.get('repeat_dropped', []))} more dropped by the repeat guard" if extras.get("repeat_dropped") else "final 8 to 10"}]
+    uniq = n_total - counts.get("dup", 0)
+    funnel = [{"label": "Articles collected", "n": n_total, "note": "Everything read this week from the RSS feeds and news APIs."},
+              {"label": "After removing repeats", "n": uniq, "note": f"{counts.get('dup', 0)} repeats removed: {dup_in_week} were the same story as another this week, {dup_past} were already in the last four issues."},
+              {"label": "Scored by Gemini", "n": n_scored, "note": "Each story gets a 0 to 100 score for how useful it is to your readers" + (f" ({uniq - n_scored} could not be scored)." if uniq > n_scored else ".")},
+              {"label": "Shortlisted", "n": n_short, "note": f"The top {n_short} by score (at most 14 per source) go forward to the final pick. {n_strong} of them scored 60 or more."},
+              {"label": "In this week\u2019s issue", "n": len(sel), "note": "Gemini picks the final stories across at least three topics" + (f"; the repeat guard swapped out {len(extras.get('repeat_dropped', []))} that were about companies covered recently." if extras.get("repeat_dropped") else ".")}]
     growth = {"active": active, "target": 2200, "series": series}
     deliv = []
     if issue and sel:

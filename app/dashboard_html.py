@@ -4,7 +4,7 @@ Everything that could alter Shreya's draft or send mail is preview-only here: th
 PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The Dispatch · Command Center</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
-<script>try{var t=localStorage.getItem('dispatch-theme-v2')}catch(e){}document.documentElement.dataset.theme=t||'light'</script>
+<script>try{var t=localStorage.getItem('dispatch-theme-v3')}catch(e){}document.documentElement.dataset.theme=t||'light'</script>
 <style>
 :root{--bg:#0B0C0E;--ink:#ECECEE;--mut:#8B8F98;--card:rgba(255,255,255,.035);--card2:rgba(255,255,255,.06);--line:#1F2937;--soft:rgba(255,255,255,.055);
 --acc:#F59E0B;--acc-soft:rgba(245,158,11,.14);--ok:#10B981;--ok-soft:rgba(16,185,129,.14);--bad:#EF4444;--bad-soft:rgba(239,68,68,.15);--info:#60A5FA;--info-soft:rgba(96,165,250,.14);
@@ -219,7 +219,7 @@ function sigRing(v){const c=v==null?'var(--mut)':v>=70?'var(--acc)':'var(--mut)'
 
 function funnel(){
   const F=S.funnel,mx=Math.max(1,F[0].n);
-  return `<div class="fun">`+F.map((f,i)=>{const lost=i?F[i-1].n-f.n:0;return `<div class="row"><div class="lab">${esc(f.label)}<small>${esc(f.note)}</small></div><div class="bar" style="width:${Math.max(6,f.n/mx*100)}%">${f.n}</div></div>${lost>0&&i<F.length?`<div class="drop">−${lost} dropped</div>`:''}`}).join('')+`</div>`;
+  return `<div class="fun">`+F.map((f,i)=>{const lost=i?F[i-1].n-f.n:0;return `<div class="row"><div class="lab">${esc(f.label)}<small>${esc(f.note)}</small></div><div class="bar" style="width:${Math.max(6,f.n/mx*100)}%">${f.n}</div></div>${lost>0?`<div class="drop">${lost} set aside</div>`:''}`}).join('')+`</div>`;
 }
 function command(){
   const k=S.kpis,B=S.balance,steps=S.stages.map((s,n)=>`<div class="step ${s.state}"><div class="c">${s.state==='done'?'✓':n+1}</div><div class="t">${esc(s.label)}</div><div class="d">${esc(s.detail)}</div></div>`).join('');
@@ -234,7 +234,7 @@ function command(){
   const hero=`<div class="hero"><div class="eyebrow">Week of ${esc(S.week)}</div><h1>${HD[0]}</h1><p>${HD[1]}</p><div class="stats"><div><b>${k.articles_week}</b><span>articles read this week</span></div><div><b>${k.selected}</b><span>stories in the draft</span></div><div><b>${k.duplicates}</b><span>repeats filtered out</span></div><div><b>${k.subscribers}</b><span>active subscribers</span></div></div></div>
   <div class="how"><div><i>1</i><b>Collect</b><span>Mon to Wed: news feeds and APIs, no repeats.</span></div><div><i>2</i><b>Pick &amp; write</b><span>Wed: Gemini chooses 10 stories and drafts your take.</span></div><div><i>3</i><b>You confirm</b><span>In Telegram. Nothing is sent without your yes.</span></div><div><i>4</i><b>Send</b><span>Thursday 8 AM IST to your subscribers.</span></div></div><div style="height:18px"></div>`;
   return hero+`<div class="card"><h2>Approval status</h2><p class="sub">The Wednesday evening pipeline, live from the database.</p><div class="appr">${ap}</div></div>
-  <div class="card" style="margin-top:16px"><h2>The ${S.funnel[0].n}-to-${S.kpis.selected} signal funnel</h2><p class="sub">Every article the pipeline saw this week, and how it narrowed to the issue. The Articles tab shows the reason each one was dropped.</p>${funnel()}</div>
+  <div class="card" style="margin-top:16px"><h2>From ${S.funnel[0].n} articles to ${S.kpis.selected} stories</h2><p class="sub">Read it top to bottom. Each bar shows how many stories are left after that step. The “All articles” tab lists every article with the reason it was kept or dropped.</p>${funnel()}</div>
   <div class="card" style="margin-top:16px"><h2>This week’s pipeline</h2><p class="sub">Monday to Wednesday collection, Wednesday selection, your confirmation, Thursday delivery.</p><div class="steps">${steps}</div></div>
   <div class="grid g6">${kpi(k.articles_week,'articles ingested','')}${kpi(k.duplicates,'duplicates caught',S.memory.dup_in_week+' in-week · '+S.memory.dup_past+' vs past issues')}${kpi(k.sources_ok+'/'+k.sources_total,'sources live','RSS · Google News · 3 APIs')}
    ${kpi(S.scored,'scored by Gemini','signal 0–100')}${kpi(avg==null?'—':avg,'avg signal of picks','vs '+avr+' for the rest')}${kpi(k.subscribers,'active subscribers','target 2,200')}</div>
@@ -443,7 +443,7 @@ const flash=(m,id)=>{const n=$(id||'#note');if(n){n.className='note show';n.text
 document.addEventListener('click',async e=>{
   const g=s=>e.target.closest(s);let b;
   if(b=g('[data-t]')){tab=b.dataset.t;location.hash=tab;render();return}
-  if(g('#theme')){const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('dispatch-theme-v2',t)}catch(x){}return}
+  if(g('#theme')){const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('dispatch-theme-v3',t)}catch(x){}return}
   if(e.target.id==='more'){F.limit+=100;render();return}
   if(b=g('[data-run]')){const old=b.textContent;b.disabled=true;b.textContent='Working…';const id=b.closest('#banner')?'#bnote':'#note';flash('Running. Selection can take up to a minute.',id);
     try{const j=await post('/api/admin/run/'+b.dataset.run);flash((j.ok?'✓ ':'✗ ')+(j.message||j.detail||'done'),id)}catch(x){flash('✗ '+x,id)}b.disabled=false;b.textContent=old;await silent();return}
