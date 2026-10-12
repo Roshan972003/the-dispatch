@@ -123,7 +123,7 @@ def run_ingest():
         try:
             return label, fn(*args), None
         except Exception as e:
-            return label, [], f"{type(e).__name__}: {str(e)[:60]}"
+            return label, [], (str(e)[:110] if isinstance(e, RuntimeError) else f"{type(e).__name__}: {str(e)[:60]}")
     items, report = [], {}
     with ThreadPoolExecutor(10) as ex:
         for label, got, err in ex.map(job, sources.plan(feeds)):

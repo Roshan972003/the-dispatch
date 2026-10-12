@@ -53,12 +53,21 @@ def hacker_news(query="India startup"):
              "published": datetime.utcfromtimestamp(h["created_at_i"])} for h in r.json()["hits"] if h.get("url")]
 
 def gdelt(query='("Indian startup" OR "India startup")'):
-    r = httpx.get("https://api.gdeltproject.org/api/v2/doc/doc", params={"query": f"{query} sourcelang:english", "mode": "artlist",
-                  "maxrecords": 50, "format": "json", "timespan": "7d"}, timeout=25, headers=UA)
+    import time
+    data = None
+    for attempt in range(2):          # GDELT allows one request per 5 seconds; a 429 comes back as plain text, so wait once and retry
+        r = httpx.get("https://api.gdeltproject.org/api/v2/doc/doc", params={"query": f"{query} sourcelang:english", "mode": "artlist",
+                      "maxrecords": 50, "format": "json", "timespan": "7d"}, timeout=25, headers=UA)
+        if r.status_code == 200 and r.text.lstrip().startswith("{"):
+            data = r.json()
+            break
+        time.sleep(6)
+    if data is None:
+        raise RuntimeError("GDELT is rate-limiting requests (one per 5 seconds). Skipped this run; every other source is unaffected.")
     return [{"url": a["url"], "title": clean(a["title"]), "source": a.get("domain", "GDELT"), "snippet": "",
              "published": _iso(a.get("seendate", "").replace("T", "T")[:4] + "-" + a.get("seendate", "")[4:6] + "-" + a.get("seendate", "")[6:8] + "T" +
                                a.get("seendate", "")[9:11] + ":" + a.get("seendate", "")[11:13] + ":" + a.get("seendate", "")[13:15]) if a.get("seendate") else None}
-            for a in r.json().get("articles", [])]
+            for a in data.get("articles", [])]
 
 def newsapi(query):
     if not config.NEWSAPI_KEY:
