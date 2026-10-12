@@ -25,7 +25,7 @@ main{max-width:1180px;margin:0 auto;padding:22px 20px 80px}
 .card+.card,.grid+.card,.card+.grid,.grid+.grid{margin-top:16px}
 h2{font:700 19px Georgia,serif;margin:0 0 4px}.sub{color:var(--mut);font-size:13px;margin:0 0 16px}
 h3{font:600 12px inherit;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);margin:0 0 12px}
-.grid{display:grid;gap:16px}.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+.grid>.card{margin-top:0}.grid{display:grid;gap:16px;align-items:stretch}.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
 @media(max-width:900px){.g4{grid-template-columns:repeat(2,1fr)}.g3,.g2{grid-template-columns:1fr}}
 .kpi .v{font:700 34px Georgia,serif;line-height:1.1;letter-spacing:-.02em}.kpi .l{font-size:13px;color:var(--mut);margin-top:4px}.kpi .d{font-size:12px;color:var(--mut);margin-top:2px}
 /* stepper */
