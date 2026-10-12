@@ -23,6 +23,15 @@ def _payload(issue, items, sub):
             "tags": [{"name": "issue", "value": str(issue["id"])}]}
 
 # ---------------- sending ----------------
+SAMPLE_SEND_CAP = 25     # generated demo subscribers: only this many are emailed per issue (never burns the provider's daily quota)
+
+def _eligible(c):
+    """Ids of active subscribers who should receive an issue: every real subscriber, plus a capped slice of sample (test) addresses."""
+    real = [r["id"] for r in db.all(c, "SELECT id FROM subscribers WHERE status='active' AND COALESCE(note,'')<>'sample'")]
+    sample = [r["id"] for r in db.all(c, "SELECT id FROM subscribers WHERE status='active' AND note='sample' ORDER BY id")]
+    keep = set(sample[:SAMPLE_SEND_CAP]) | {r["id"] for r in db.all(c, "SELECT id FROM subscribers WHERE status='active' AND email LIKE ?", ("bounced+live%",))}
+    return set(real) | keep
+
 def send_issue(issue_id, budget_s=50):
     """Send to every active subscriber not yet sent to. Idempotent and resumable: re-running only picks up the rest."""
     from app import telegram
@@ -34,8 +43,9 @@ def send_issue(issue_id, budget_s=50):
         db.run(c, "UPDATE issues SET status='sending' WHERE id=?", (issue_id,))
         items = db.all(c, """SELECT i.position, i.topic, i.commentary, i.access, i.alt_url, i.alt_source, a.title, a.url, a.source FROM issue_items i JOIN articles a ON a.id=i.article_id
                              WHERE i.issue_id=? AND i.kind='selected' ORDER BY i.position""", (issue_id,))
-        todo = db.all(c, """SELECT s.id, s.email, s.token FROM subscribers s LEFT JOIN sends x ON x.subscriber_id=s.id AND x.issue_id=?
-                            WHERE s.status='active' AND (x.id IS NULL OR x.status='failed')""", (issue_id,))
+        ok_ids = _eligible(c)
+        todo = [r for r in db.all(c, """SELECT s.id, s.email, s.token FROM subscribers s LEFT JOIN sends x ON x.subscriber_id=s.id AND x.issue_id=?
+                            WHERE s.status='active' AND (x.id IS NULL OR x.status='failed')""", (issue_id,)) if r["id"] in ok_ids]
     sent = failed = 0
     for i in range(0, len(todo), 50):
         if time.time() - t0 > budget_s:
@@ -54,8 +64,8 @@ def send_issue(issue_id, budget_s=50):
                     db.run(c, "UPDATE subscribers SET status='bounced', status_changed_at=?, note=? WHERE id=?", (config.now_ist().isoformat(timespec="seconds"), err[:200], s["id"]))
                 sent += 1 if pid else 0; failed += 0 if pid else 1
     with db.conn() as c:
-        left = db.one(c, """SELECT COUNT(*) AS n FROM subscribers s LEFT JOIN sends x ON x.subscriber_id=s.id AND x.issue_id=?
-                            WHERE s.status='active' AND (x.id IS NULL OR x.status!='sent')""", (issue_id,))["n"]
+        left = len([r for r in db.all(c, """SELECT s.id FROM subscribers s LEFT JOIN sends x ON x.subscriber_id=s.id AND x.issue_id=?
+                            WHERE s.status='active' AND (x.id IS NULL OR x.status!='sent')""", (issue_id,)) if r["id"] in _eligible(c)])
         if left == 0:
             db.run(c, "UPDATE issues SET status='sent', sent_at=? WHERE id=?", (config.now_ist().isoformat(timespec="seconds"), issue_id))
         db.log(c, "send", f"issue {issue_id}: sent={sent} failed={failed} remaining={left}")

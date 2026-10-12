@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS events (
 """
 PG_SCHEMA = SCHEMA.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
 
-MIGRATIONS = [("articles", "signal", "INTEGER"), ("articles", "signal_filter", "TEXT"), ("issue_items", "entities", "TEXT"), ("subscribers", "unsub_reason", "TEXT"),
+MIGRATIONS = [("articles", "signal", "INTEGER"), ("articles", "signal_filter", "TEXT"), ("issue_items", "entities", "TEXT"), ("subscribers", "unsub_reason", "TEXT"), ("subscribers", "name", "TEXT"),
               ("issue_items", "counter", "TEXT"), ("issue_items", "access", "TEXT"), ("issue_items", "alt_url", "TEXT"), ("issue_items", "alt_source", "TEXT"),
               ("issues", "subject_options", "TEXT"), ("issues", "subject", "TEXT"), ("issues", "preheader", "TEXT"), ("issues", "fusions", "TEXT")]   # columns added after first release
 _READY = False
