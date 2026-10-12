@@ -55,7 +55,7 @@ def hacker_news(query="India startup"):
 def gdelt(query='("Indian startup" OR "India startup")'):
     import time
     data = None
-    for attempt in range(2):          # GDELT allows one request per 5 seconds; a 429 comes back as plain text, so wait once and retry
+    for attempt in range(3):          # GDELT allows one request per 5 seconds; a 429 comes back as plain text, so wait once and retry
         r = httpx.get("https://api.gdeltproject.org/api/v2/doc/doc", params={"query": f"{query} sourcelang:english", "mode": "artlist",
                       "maxrecords": 50, "format": "json", "timespan": "7d"}, timeout=25, headers=UA)
         if r.status_code == 200 and r.text.lstrip().startswith("{"):
