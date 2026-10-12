@@ -139,3 +139,9 @@ def archive(week: str):
     if not issue:
         return RedirectResponse("/sample", status_code=302)      # not sent yet (or unknown week): show the sample issue, not an error
     return HTMLResponse(mailer.render(issue, items)[1])
+
+
+@app.get("/components-map", response_class=HTMLResponse)
+def components_map():
+    """The components map required for submission (course format), served from the app so it has a public URL."""
+    return HTMLResponse((config.ROOT / "components-map.html").read_text())

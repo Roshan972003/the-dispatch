@@ -59,7 +59,7 @@ def _q_issue(week):
 def _q_articles(week):
     with db.conn() as c:
         arts = db.all(c, """SELECT a.id, a.title, a.url, a.source, a.status, a.topic, a.published_at, a.signal, a.signal_filter, a.fingerprint, d.title AS dup_title
-                            FROM articles a LEFT JOIN articles d ON d.id=a.dup_of WHERE a.week=? ORDER BY a.published_at DESC LIMIT 600""", (week,))
+                            FROM articles a LEFT JOIN articles d ON d.id=a.dup_of WHERE a.week=? ORDER BY a.published_at DESC LIMIT 1500""", (week,))
         counts = {r["status"]: r["n"] for r in db.all(c, "SELECT status, COUNT(*) AS n FROM articles WHERE week=? GROUP BY status", (week,))}
         total = db.one(c, "SELECT COUNT(*) AS n FROM articles")["n"]
         dd = db.one(c, "SELECT SUM(CASE WHEN dup_of IS NOT NULL THEN 1 ELSE 0 END) AS in_week, SUM(CASE WHEN dup_of IS NULL THEN 1 ELSE 0 END) AS past FROM articles WHERE week=? AND status='dup'", (week,))
@@ -131,7 +131,7 @@ def build_graph(mem, week, editions=None, now=None):
             n = nodes.setdefault(e["name"], {"name": e["name"], "type": e["type"], "weeks": set(), "stories": [], "count": 0})
             n["weeks"].add(m["week"]); n["count"] += 1
             thursday = datetime.strptime(m["week"], "%Y-%m-%d") + timedelta(days=3)
-            n["stories"].append({"week": m["week"], "title": m["title"], "topic": m["topic"], "url": m["url"], "edition": (editions or {}).get(m["week"]),
+            n["stories"].append({"week": m["week"], "title": m["title"], "topic": m["topic"], "url": m["url"], "status": m.get("status"), "edition": (editions or {}).get(m["week"]),
                                  "days_ago": max(0, (now - thursday).days) if now else None})
             names.append(e["name"])
         for i, a in enumerate(names):
@@ -300,7 +300,7 @@ def state(fresh=False):
         elif a["status"] == "selected":
             a["reason"] = "Picked for this issue."
         elif a["title"] in dropped:
-            a["reason"] = "Dropped by the repeat guard: it " + dropped[a["title"]] + "."
+            a["reason"] = "Dropped by a safeguard: it " + dropped[a["title"]] + "."
         elif a["title"] in runner:
             a["reason"] = f"Runner-up #{runner[a['title']]}: kept in reserve for the Swap carousel."
         elif a["source"] == "Added by Shreya":

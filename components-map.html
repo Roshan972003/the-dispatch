@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Dispatch · Components Map</title>
+<style>
+  /* Components map, course format: a cream poster; a dark header row (Actor, Trigger, Input, Processing, AI, Context, Output);
+     one tinted swim-lane per component with ONE box that steps down and to the right; dashed arrows with small labels; pill legend; stack line.
+     On a phone the drawing becomes a numbered list. */
+  :root{
+    --page:#E6EEEB; --poster:#F7F5EE; --ink:#2A2620; --muted:#6B6256; --head:#635748; --headink:#FFFFFF; --line:#D9D3C6; --arrow:#4A4339;
+    --font:"Verdana","DejaVu Sans",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--ink);font-family:var(--font);padding:24px 16px 40px;line-height:1.35}
+  .wrap{max-width:1500px;margin:0 auto}
+  .poster{background:var(--poster);border-radius:26px;padding:34px 30px 24px}
+  h1{font:700 clamp(20px,2.9vw,31px)/1.2 var(--font);margin:0;text-align:center;text-wrap:balance}
+  .sub{color:var(--muted);text-align:center;font-size:clamp(12px,1.4vw,15px);margin:10px 0 24px}
+  .board{position:relative}
+  .grid{display:grid;grid-template-columns:170px repeat(6,minmax(0,1fr));column-gap:6px;position:relative;z-index:1}
+  .ch{background:var(--head);color:var(--headink);font:700 17px var(--font);text-align:center;padding:16px 6px;margin-bottom:3px}
+  .ch.f{border-radius:10px 0 0 10px}.ch.l{border-radius:0 10px 10px 0}
+  .lane{display:contents}
+  .ln{background:var(--head);color:var(--headink);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:10px 8px;margin-block:2px;min-height:118px}
+  .ln b{font:700 17px var(--font)}.ln span{font-size:12.5px;opacity:.78;margin-top:2px}
+  .cell{position:relative;display:flex;align-items:center;padding:7px 8px;margin-block:2px;background:var(--band);z-index:0}
+  .cell.first{border-radius:0}
+  .box{position:relative;width:100%;border:2px solid;border-radius:13px;padding:9px 10px 10px;text-align:center;z-index:2;font-size:13px;line-height:1.35;background:var(--bg);border-color:var(--bd)}
+  .box b{display:block;font:700 14.5px/1.25 var(--font);margin-bottom:3px}
+  .box span{color:#3F392F;font-size:12.5px}
+  .box .n{position:absolute;top:-9px;left:-9px;width:20px;height:20px;border-radius:50%;background:var(--ink);color:#fff;font:700 10.5px/20px var(--font);text-align:center;font-style:normal}
+  /* one palette per lane, taken from the course example */
+  .c0{--band:#DDE8F5;--bg:#CFE2F6;--bd:#5B8FCB}.c1{--band:#E6E0F2;--bg:#DCD3F0;--bd:#8068C4}.c2{--band:#F6EFC9;--bg:#FAEBB4;--bd:#CDA324}
+  .c3{--band:#F8DCE5;--bg:#F9CFDC;--bd:#D45F85}.c4{--band:#DCEEDF;--bg:#C8E6CE;--bd:#4BA56A}.c5{--band:#D6ECEE;--bg:#BDE5E6;--bd:#2E9DA2}
+  .c6{--band:#F8E4D2;--bg:#F8D7BA;--bd:#E19549}.c7{--band:#DDE8F5;--bg:#CFE2F6;--bd:#5B8FCB}.c8{--band:#E6E0F2;--bg:#DCD3F0;--bd:#8068C4}.c9{--band:#E8E5DD;--bg:#E0DBCF;--bd:#847A68}
+  svg.wires{position:absolute;inset:0;width:100%;height:100%;z-index:3;pointer-events:none;overflow:visible}
+  svg.wires path.w{fill:none;stroke:var(--arrow);stroke-width:1.5;stroke-dasharray:5 4}
+  svg.wires .lb rect{fill:#F7F5EE;stroke:#BDB5A4;stroke-width:1}
+  svg.wires .lb text{font:600 12px var(--font);fill:#5B5448;text-anchor:middle;dominant-baseline:central}
+  .legend{display:flex;flex-wrap:wrap;justify-content:center;gap:10px 14px;margin-top:26px}
+  .legend span{display:inline-flex;padding:9px 22px;border-radius:999px;border:2px solid;font-size:15px}
+  .stack{text-align:center;color:var(--muted);font-size:14px;margin:14px 0 0}
+  .list{display:none;margin:0;padding:0;list-style:none}
+  .list li{display:grid;grid-template-columns:30px minmax(0,1fr);gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+  .list li:last-child{border:0}.list .n{width:26px;height:26px;border-radius:50%;background:var(--ink);color:#fff;font:700 12px/26px var(--font);text-align:center;font-style:normal}
+  .list .who{font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}.list b{display:block;font-size:14.5px}.list p{margin:2px 0 0;color:var(--muted);font-size:13px}
+  @media(max-width:980px){.grid,.wires{display:none}.list{display:block}.poster{padding:22px 16px}}
+</style></head>
+<body><div class="wrap"><div class="poster">
+  <h1>The Dispatch &middot; Weekly Newsletter &mdash; Components Map</h1>
+  <p class="sub">Mon&ndash;Wed collect &rarr; Wed pick and draft &rarr; Shreya confirms in Telegram &rarr; Thu 8 AM email</p>
+  <div class="board" id="board">
+    <svg class="wires" id="wires" aria-hidden="true"><defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#4A4339"/></marker></defs></svg>
+    <div class="grid" id="grid"></div>
+    <ol class="list" id="list"></ol>
+  </div>
+  <div class="legend">
+    <span style="background:#F9CFDC;border-color:#D45F85">Gemini picks and writes</span>
+    <span style="background:#FAEBB4;border-color:#CDA324">The app enforces the rules</span>
+    <span style="background:#BDE5E6;border-color:#2E9DA2">Services store, send and notify</span>
+    <span style="background:#CFE2F6;border-color:#5B8FCB">People review and read</span>
+    <span style="background:#C8E6CE;border-color:#4BA56A">Nothing is emailed until Shreya confirms</span>
+  </div>
+  <p class="stack">Stack: Vercel Cron &middot; FastAPI on Vercel &middot; Gemini Flash &middot; Neon Postgres &middot; Telegram Bot &middot; Resend</p>
+</div></div>
+
+<script>
+const COLS = ["Trigger", "Input", "Processing", "AI", "Context", "Output"];
+// lane: name, sub-label
+const LANES = [["Scheduler", "Vercel Cron"], ["RSS feeds", "20 feeds"], ["News APIs", "Keyed + keyless"], ["Dispatch app", "Rules + routing"], ["Gemini Flash", "Editor"], ["Neon database", "Memory"],
+               ["Telegram", "Review chat"], ["Shreya", "Editor"], ["Resend", "Email"], ["Subscriber", "Reader"], ["Dashboard", "Control center"]];
+// id, lane, column, title, lines
+const STEPS = [
+  [1, 0, 0, "Weekly schedule", "Mon&ndash;Wed 8 AM ingest<br>Wed 2 PM pick &middot; Thu 8 AM send"],
+  [2, 1, 1, "RSS feeds", "20 Indian startup and<br>business news feeds"],
+  [3, 2, 1, "News APIs", "NewsAPI &middot; GNews &middot; NewsData<br>Google News &middot; GDELT"],
+  [4, 3, 2, "Ingests and cleans", "no repeats: same link, same story,<br>last 4 issues; repeat guard"],
+  [5, 4, 3, "Picks 10, writes the take", "3+ sectors; Shreya's voice;<br>best of three drafts"],
+  [6, 5, 4, "Saves everything", "articles, drafts, edits,<br>subscribers, style guide"],
+  [7, 6, 5, "Delivers the draft", "10 cards: Keep, Swap, Edit,<br>Voice; 10 PM reminder"],
+  [8, 7, 5, "Reviews and confirms", "two-step confirm;<br>nothing sends before it"],
+  [9, 8, 5, "Sends Thursday 8 AM", "to active subscribers;<br>one-click unsubscribe"],
+  [10, 9, 5, "Reads or unsubscribes", "bounces and complaints<br>switch addresses off"],
+  [11, 10, 5, "Shows it all", "funnel, draft, subscribers,<br>safeguards"]];
+// g = out of the right edge, down the gutter, into the left edge; dr = down then right; v = straight down
+const LINKS = [[1, 2, "g", "fires"], [1, 3, "g", ""], [2, 4, "g", ""], [3, 4, "dr", "articles"], [4, 5, "dr", "shortlist"], [5, 6, "dr", "draft"], [6, 7, "dr", "sends"],
+               [7, 8, "v", ""], [8, 9, "v", ""], [9, 10, "v", ""], [10, 11, "v", ""]];
+
+const grid = document.getElementById("grid"), list = document.getElementById("list");
+let html = '<div class="ch f">Actor</div>' + COLS.map((c, i) => `<div class="ch${i === 5 ? " l" : ""}">${c}</div>`).join("");
+LANES.forEach((l, li) => {
+  html += `<div class="lane c${li%10}"><div class="ln"><b>${l[0]}</b><span>(${l[1]})</span></div>`;
+  for (let c = 0; c < 6; c++) {
+    const s = STEPS.find(x => x[1] === li && x[2] === c);
+    html += `<div class="cell c${li%10}">${s ? `<div class="box" id="s${s[0]}"><i class="n">${s[0]}</i><b>${s[3]}</b><span>${s[4]}</span></div>` : ""}</div>`;
+  }
+  html += "</div>";
+});
+grid.innerHTML = html;
+list.innerHTML = STEPS.map(s => `<li><i class="n">${s[0]}</i><div><div class="who">${LANES[s[1]][0]} &middot; ${COLS[s[2]]}</div><b>${s[3]}</b><p>${s[4].replace(/<br>/g, " ")}</p></div></li>`).join("");
+
+function draw() {
+  const svg = document.getElementById("wires");
+  svg.querySelectorAll(".w,.lb").forEach(n => n.remove());
+  if (getComputedStyle(grid).display === "none") return;
+  const root = document.getElementById("board").getBoundingClientRect();
+  const R = id => { const r = document.getElementById("s" + id).getBoundingClientRect();
+    return { l: r.left - root.left, r: r.right - root.left, t: r.top - root.top, b: r.bottom - root.top, cx: (r.left + r.right) / 2 - root.left, cy: (r.top + r.bottom) / 2 - root.top }; };
+  const NS = "http://www.w3.org/2000/svg";
+  const put = (d, label, lx, ly) => {
+    const p = document.createElementNS(NS, "path"); p.setAttribute("d", d); p.setAttribute("class", "w"); p.setAttribute("marker-end", "url(#ah)"); svg.appendChild(p);
+    if (label) { const w = label.length * 7.2 + 20, g = document.createElementNS(NS, "g"); g.setAttribute("class", "lb");
+      g.innerHTML = `<rect x="${lx - w / 2}" y="${ly - 10}" width="${w}" height="20" rx="10"/><text x="${lx}" y="${ly}">${label}</text>`; svg.appendChild(g); }
+  };
+  LINKS.forEach(([a, b, k, label]) => {
+    const A = R(a), B = R(b);
+    if (k === "dr") put(`M${A.cx},${A.b} L${A.cx},${B.cy} L${B.l - 3},${B.cy}`, label, (A.cx + B.l) / 2, B.cy);
+    else if (k === "g") { const gx = (A.r + B.l) / 2; put(`M${A.r},${A.cy} L${gx},${A.cy} L${gx},${B.cy} L${B.l - 3},${B.cy}`, label, gx, (A.cy + B.cy) / 2); }
+    else put(`M${A.cx},${A.b} L${B.cx},${B.t - 2}`, "", 0, 0);
+  });
+}
+addEventListener("resize", draw);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
+addEventListener("load", draw); setTimeout(draw, 300);
+</script></body></html>

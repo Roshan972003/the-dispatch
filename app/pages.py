@@ -36,7 +36,7 @@ def landing():
 <p class="lead">Every Thursday morning: the Indian startup stories worth your time, and Shreya’s two or three lines on what the headline leaves out.</p>
 <ul class="pts"><li><b>1</b><span><strong>Curated, not aggregated.</strong> Counterintuitive, under-reported, or connecting two trends nobody has linked.</span></li>
 <li><b>2</b><span><strong>Never repeats itself.</strong> Every story is checked against the last four issues.</span></li>
-<li><b>3</b><span><strong>Read in five minutes.</strong> Built to be read on your phone, with a free link when a story is paywalled.</span></li></ul>
+<li><b>3</b><span><strong>Read in five minutes.</strong> Built to be read on your phone. Paywalled links are flagged, with a free alternative when we can find one.</span></li></ul>
 <form class="sub" id="f"><input type="email" name="email" placeholder="you@company.com" required autocomplete="email"><button class="btn">Subscribe</button></form><div id="m"></div>
 <p style="font-size:13px;margin-top:6px">Free. One email a week. Unsubscribe in one click, any time.</p>
 <p style="margin-top:18px"><a class="btn ghost" href="/sample" style="padding:10px 16px;font-size:14px">See a sample issue →</a></p>{share_row()}

@@ -363,6 +363,28 @@ def fuse(sg, a, b, tuner=None, fast=True):
             break
     return text, errs
 
+def paywall_guard(stories, backs, acc, ents, past_keys):
+    """Subscribers hate clicking into a wall. Swap out any pick behind a HARD paywall that has no free coverage for the best free runner-up
+    (one that does not repeat a company), keeping the count and the 3-sector spread. Returns (stories, backs, swapped=[{title, reason}])."""
+    keys = lambda sid: {e["name"].strip().lower() for e in ents.get(sid, []) if e["type"] in KEY_TYPES}
+    used = set().union(*[keys(x["id"]) for x in stories]) if stories else set()
+    pool, out, swapped = list(backs), [], []
+    for st in stories:
+        a = acc.get(st["id"], {})
+        if a.get("access") == "hard" and not a.get("alt_url"):
+            others = used - keys(st["id"])
+            alt = next((b for b in pool if acc.get(b["id"], {}).get("access") == "free" and not (keys(b["id"]) & (others | past_keys))), None)
+            if alt:
+                pool.remove(alt); out.append(alt); used = others | keys(alt["id"])
+                swapped.append({"title": st["title"], "reason": "is behind a hard paywall with no free coverage"})
+                continue
+        out.append(st)
+    if len({x["topic"] for x in out}) < config.MIN_TOPICS:
+        return stories, backs, []
+    for n, st in enumerate(out, 1):
+        st["pos"] = n
+    return out, pool, swapped
+
 def _safe(fn, *a):
     try:
         return fn(*a)
@@ -460,6 +482,9 @@ def run_selection(force=False):
     with db.conn() as c:
         past_keys = recent_entity_keys(c, week)
     stories, backs, replaced = repeat_guard(stories, backs, ents, past_keys)
+    acc = _safe(access.diagnose_all, stories + backs[:8], pool_all) or {}        # which links open freely? done before the final pick so a wall can be avoided
+    stories, backs, walled = paywall_guard(stories, backs, acc, ents, past_keys)
+    replaced = replaced + walled
     top3 = backs[:3]
     from app import readable
     with ThreadPoolExecutor(10) as ex:         # real article text for the source pane, key quotes and richer commentary (Google News links cannot be read)
@@ -471,10 +496,12 @@ def run_selection(force=False):
         fb = [ex.submit(draft_best, sg, s, tuner, 2) for s in top3]
         fs, ft = ex.submit(_safe, score_pool, sg, cands), ex.submit(_safe, cluster_trends, cands)
         fa, fj = ex.submit(_safe, angles, stories), ex.submit(_safe, subject_lines, stories, sg["banned"])
-        fx = ex.submit(_safe, access.diagnose_all, stories + backs[:6], pool_all)
         drafts, bdrafts = [f.result() for f in fd], [f.result() for f in fb]
         scores, trends = fs.result() or {}, ft.result() or []
-        ang, subjects, acc = fa.result() or {"counter": {}, "fusions": []}, fj.result() or [], fx.result() or {}
+        ang, subjects = fa.result() or {"counter": {}, "fusions": []}, fj.result() or []
+        missing = [x for x in stories + backs[:6] if x["id"] not in acc]
+        if missing:
+            acc.update(_safe(access.diagnose_all, missing, pool_all) or {})
     lap('parallel_jobs')
     notes = (res.get("week_theme") or "") + (f"\nFLAG: {flag}" if flag else "")
     now = config.now_ist().isoformat(timespec="seconds")

@@ -57,9 +57,17 @@ def render(issue, items, token="preview"):
                   f'<td style="padding:5px 0;font:15px/1.4 {F};vertical-align:top" class="ink">{h(_clip(i["title"], 105))}</td></tr>' for i in items)
     stories = []
     for n, it in enumerate(items, 1):
-        walled = it.get("access") in ("soft", "hard", "dead")
-        alt = (f'<div style="margin-top:6px;font:13px {S}" class="mut">🔒 This one may be paywalled. '
-               + (f'<a href="{h(it["alt_url"])}" style="color:#b45309;font-weight:600" class="lk">Free coverage from {h(it["alt_source"])} →</a>' if it.get("alt_url") else "A free version wasn't found this week.") + "</div>") if walled else ""
+        acc_ = it.get("access")
+        walled = acc_ in ("soft", "hard", "dead")
+        if walled and it.get("alt_url"):
+            alt = (f'<div style="margin-top:6px;font:13px {S}" class="mut">🔒 {h(it["source"])} may ask for a subscription. '
+                   f'<a href="{h(it["alt_url"])}" style="color:#b45309;font-weight:600" class="lk">Read the free coverage from {h(it["alt_source"])} →</a></div>')
+        elif acc_ == "hard":
+            alt = f'<div style="margin-top:6px;font:13px {S}" class="mut">🔒 Subscription needed: this story sits behind {h(it["source"])}’s paywall. The take above stands on its own.</div>'
+        elif walled:
+            alt = f'<div style="margin-top:6px;font:13px {S}" class="mut">🔒 May be limited to subscribers. The take above stands on its own.</div>'
+        else:
+            alt = ""
         stories.append(
             f'<tr><td style="padding:30px 0 6px;border-top:1px solid #e8e2d4" class="rule">'
             f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="font:700 13px {S};letter-spacing:.08em;text-transform:uppercase;color:#b45309" class="lk">'
@@ -107,7 +115,8 @@ def render(issue, items, token="preview"):
     for n, it in enumerate(items, 1):
         text += [f"{n:02d} · {(it['topic'] or '').upper()}", it["title"], f"Shreya's take: {it['commentary']}", f"{it['source']} · {it['url']}"]
         if it.get("access") in ("soft", "hard", "dead"):
-            text.append("May be paywalled." + (f" Free coverage ({it['alt_source']}): {it['alt_url']}" if it.get("alt_url") else ""))
+            text.append((f"{it['source']} may ask for a subscription. Free coverage ({it['alt_source']}): {it['alt_url']}" if it.get("alt_url")
+                         else ("Subscription needed at " + it["source"] + ". The take above stands on its own." if it.get("access") == "hard" else "May be limited to subscribers. The take above stands on its own.")))
         text.append("")
     text += ["— Shreya", "", f"Share The Dispatch: {base}", f"View in browser: {view}", f"Unsubscribe: {unsub}"]
     return subject, html, "\n".join(text)
