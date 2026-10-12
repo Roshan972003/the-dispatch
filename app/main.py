@@ -3,6 +3,8 @@ from fastapi.responses import HTMLResponse
 from app import config, db
 
 app = FastAPI(title="The Dispatch: Newsletter Intelligence Engine")
+from app.dashboard import router as dashboard_router
+app.include_router(dashboard_router)
 
 def cron_auth(request: Request):
     """Vercel sends 'Authorization: Bearer $CRON_SECRET' to cron routes when CRON_SECRET is set."""

@@ -129,9 +129,14 @@ def run_ingest():
         for label, got, err in ex.map(job, sources.plan(feeds)):
             items += got
             report[label] = err or len(got)
+    result = {"week": week, "sources_total": len(report),
+              "sources_failed": {k: v for k, v in report.items() if not isinstance(v, int)},
+              "sources_empty": [k for k, v in report.items() if v == 0], "per_source": {k: v for k, v in report.items() if isinstance(v, int) and v}}
+    result["sources_ok"] = len(result["per_source"])
     with db.conn() as c:
         stats = store(c, items, week)
+        result.update(stats)
+        import json
+        db.kv_set(c, "last_ingest", json.dumps({**result, "at": config.now_ist().isoformat(timespec="seconds")}))
         db.log(c, "ingest", f"{stats}")
-    return {"week": week, **stats, "sources_ok": sum(1 for v in report.values() if isinstance(v, int) and v > 0),
-            "sources_failed": {k: v for k, v in report.items() if not isinstance(v, int)},
-            "sources_empty": [k for k, v in report.items() if v == 0], "per_source": {k: v for k, v in report.items() if isinstance(v, int) and v}}
+    return result

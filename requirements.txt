@@ -4,3 +4,4 @@ httpx
 python-dotenv
 psycopg[binary]
 feedparser
+python-multipart
