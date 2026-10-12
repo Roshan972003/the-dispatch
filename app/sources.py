@@ -80,6 +80,16 @@ def gnews(query):
     return [{"url": a["url"], "title": a["title"], "source": (a.get("source") or {}).get("name", "GNews"),
              "snippet": clean(a.get("description") or ""), "published": _iso(a.get("publishedAt") or "")} for a in r.json().get("articles", [])]
 
+def gnews_all(queries):
+    """GNews rate-limits bursts (429), so its queries run one after another with a pause."""
+    import time
+    out = []
+    for i, q in enumerate(queries):
+        if i:
+            time.sleep(1.3)
+        out += gnews(q)
+    return out
+
 def newsdata(query):
     if not config.NEWSDATA_API_KEY:
         return []
@@ -96,6 +106,6 @@ def plan(feeds):
     jobs += [("hackernews", hacker_news, ()), ("gdelt", gdelt, ())]
     for q in NEWS_QUERIES:
         jobs += [(f"newsapi:{q}", newsapi, (q,))]
-    for q in NEWS_QUERIES[:4]:              # keep keyed free tiers (GNews 100/day, NewsData 200/day) well under their limits
-        jobs += [(f"gnews:{q}", gnews, (q,)), (f"newsdata:{q}", newsdata, (q,))]
+    jobs += [("gnews", gnews_all, (NEWS_QUERIES[:4],))]     # keep keyed free tiers (GNews 100/day, NewsData 200/day) well under their limits
+    jobs += [(f"newsdata:{q}", newsdata, (q,)) for q in NEWS_QUERIES[:4]]
     return jobs
