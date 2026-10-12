@@ -327,7 +327,7 @@ def state(fresh=False):
     uniq = n_total - counts.get("dup", 0)
     funnel = [{"label": "Articles collected", "n": n_total, "note": "Everything read this week from the RSS feeds and news APIs."},
               {"label": "After removing repeats", "n": uniq, "note": f"{counts.get('dup', 0)} repeats removed: {dup_in_week} were the same story as another this week, {dup_past} were already in the last four issues."},
-              {"label": "Scored by Gemini", "n": n_scored, "note": "Each story gets a 0 to 100 score for how useful it is to your readers" + (f" ({uniq - n_scored} could not be scored)." if uniq > n_scored else ".")},
+              {"label": "Scored by Gemini", "n": n_scored, "note": "Each story gets a 0 to 100 score for how useful it is to your readers" + (f" ({uniq - n_scored} not scored: added after scoring or could not be rated)." if uniq > n_scored else ".")},
               {"label": "Shortlisted", "n": n_short, "note": f"The top {n_short} by score (at most 14 per source) go forward to the final pick. {n_strong} of them scored 60 or more."},
               {"label": "In this week\u2019s issue", "n": len(sel), "note": "Gemini picks the final stories across at least three topics" + (f"; the repeat guard swapped out {len(extras.get('repeat_dropped', []))} that were about companies covered recently." if extras.get("repeat_dropped") else ".")}]
     growth = {"active": active, "target": 2200, "series": series}

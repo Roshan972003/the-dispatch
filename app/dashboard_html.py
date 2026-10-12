@@ -519,7 +519,7 @@ document.addEventListener('click',async e=>{
   if(b=g('.pi')){palRun(+b.dataset.i);return}
   if(e.target.id==='pal'){palClose();return}
   if(b=g('[data-sim]')){await simAct(b.dataset.sim);return}
-  if(e.target.id==='addsub'){flash('Sending…');const j=await post('/api/admin/subscribers',{emails:$('#em').value});flash(j.ok?`✓ ${j.added} ${j.mode==='instant'?'added as active':'confirmation email(s) sent'}${j.invalid?`, ${j.invalid} invalid`:''}.`:'✗ '+j.message);await silent()}
+  if(e.target.id==='addsub'){flash('Sending…');const j=await post('/api/admin/subscribers',{emails:$('#em').value});flash(j.ok?(j.added?`✓ ${j.added} ${j.mode==='instant'?'added as active':'confirmation email(s) sent'}${j.invalid?`, ${j.invalid} not a valid email`:''}.`:`✗ Nothing added: ${j.invalid||0} not a valid email address.`):'✗ '+j.message);await silent()}
 });
 async function simAct(a){const p=a.split(':'),k=p[0],id=+p[1],bid=+p[2];if(!sim)simInit();
   if(k==='reset'&&p.length===2&&id===0)simInit();else if(k==='reset'){delete sim.edits[id];delete sim.tuned[id]}
