@@ -20,7 +20,7 @@ def same_origin(request):
 
 @router.get("/dashboard", response_class=HTMLResponse)
 def dashboard():
-    return PAGE
+    return HTMLResponse(PAGE, headers={"Cache-Control": "no-store"})
 
 # ---------------- state ----------------
 def _next_runs(now):
@@ -470,7 +470,7 @@ def email_preview():
                              WHERE i.issue_id=? AND i.kind='selected' ORDER BY i.position""", (issue["id"],)) if issue else []
     if not items:
         return HTMLResponse("<body style='font:16px sans-serif;padding:40px'>No draft yet this week.</body>")
-    return HTMLResponse(mailer.render(issue, items)[1])
+    return HTMLResponse(mailer.render(issue, items)[1], headers={"Cache-Control": "no-store"})
 
 
 @router.post("/api/admin/tuner")
