@@ -1,5 +1,5 @@
 {
-  "functions": { "index.py": { "maxDuration": 60 } },
+  "functions": { "index.py": { "maxDuration": 300 } },
   "crons": [
     { "path": "/api/cron/ingest",   "schedule": "30 2 * * 1-3" },
     { "path": "/api/cron/select",   "schedule": "30 8 * * 3" },

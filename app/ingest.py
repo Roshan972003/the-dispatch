@@ -12,28 +12,27 @@ import httpx, feedparser
 from app import config, db
 
 DEFAULT_FEEDS = [
-    ("Entrackr", "https://entrackr.com/feed"),
     ("Inc42", "https://inc42.com/feed/"),
     ("YourStory", "https://yourstory.com/feed"),
+    ("Entrackr", "https://entrackr.com/rss"),
     ("Economic Times Startups", "https://economictimes.indiatimes.com/small-biz/startups/rssfeeds/11993050.cms"),
-    ("Moneycontrol Startups", "https://www.moneycontrol.com/rss/startup.xml"),
+    ("Economic Times Tech", "https://economictimes.indiatimes.com/tech/rssfeeds/13357270.cms"),
     ("TechCrunch", "https://techcrunch.com/feed/"),
     ("Medianama", "https://www.medianama.com/feed/"),
-    ("The Hindu BusinessLine Startups", "https://www.thehindubusinessline.com/companies/feeder/default.rss"),
+    ("The Hindu BusinessLine", "https://www.thehindubusinessline.com/companies/feeder/default.rss"),
     ("Livemint Companies", "https://www.livemint.com/rss/companies"),
-    ("Business Standard Startups", "https://www.business-standard.com/rss/companies-101.rss"),
-    ("VCCircle", "https://www.vccircle.com/feed"),
-    ("Analytics India Magazine", "https://analyticsindiamag.com/feed/"),
+    ("Livemint Technology", "https://www.livemint.com/rss/technology"),
     ("The Ken", "https://the-ken.com/feed/"),
-    ("Tracxn Blog", "https://tracxn.com/d/blog/rss.xml"),
+    ("The Arc", "https://thearcweb.com/rss"),
+    ("Indian Express Tech", "https://indianexpress.com/section/technology/feed/"),
+    ("Rest of World", "https://restofworld.org/feed/"),
 ]
-NEWS_QUERIES = [
-    "India startup funding", "Indian startup layoffs OR shutdown", "SEBI startup IPO India",
-    "India fintech regulation RBI", "India D2C quick commerce", "India AI startup", "India SaaS startup",
-]
+BROKEN_FEEDS = ["https://entrackr.com/feed", "https://www.moneycontrol.com/rss/startup.xml", "https://www.business-standard.com/rss/companies-101.rss",
+                "https://www.vccircle.com/feed", "https://analyticsindiamag.com/feed/", "https://tracxn.com/d/blog/rss.xml",
+                "https://www.thehindubusinessline.com/companies/feeder/default.rss.OLD"]
 STOP = set("a an the of in on at to for and or with as by from is are was were be its it this that new says say after over into amid".split())
 TRACKING = ("utm_", "fbclid", "gclid", "ref", "source", "cmpid", "ocid")
-MAX_AGE_DAYS = 8
+from app.ingest_util import clean as _clean, MAX_AGE_DAYS
 
 def canon(url):
     s = urlsplit(url.strip())
@@ -57,43 +56,9 @@ def similar(fp_a, fp_b, threshold=0.6):
         return False
     return len(a & b) / len(a | b) >= threshold
 
-def _clean(html):
-    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html or "")).strip()[:600]
-
-def _published(entry):
-    t = entry.get("published_parsed") or entry.get("updated_parsed")
-    return datetime.utcfromtimestamp(calendar.timegm(t)) if t else None
-
-def fetch_rss(name, url):
-    r = httpx.get(url, timeout=20, follow_redirects=True, headers={"User-Agent": "TheDispatchBot/1.0"})
-    r.raise_for_status()
-    out = []
-    for e in feedparser.parse(r.content).entries:
-        if e.get("link") and e.get("title"):
-            out.append({"url": e["link"], "title": _clean(e["title"]), "source": name,
-                        "snippet": _clean(e.get("summary", "")), "published": _published(e)})
-    return out
-
-def fetch_newsapi(query):
-    if not config.NEWSAPI_KEY:
-        return []
-    frm = (datetime.utcnow() - timedelta(days=MAX_AGE_DAYS)).strftime("%Y-%m-%d")
-    r = httpx.get("https://newsapi.org/v2/everything", timeout=20, params={
-        "q": query, "from": frm, "language": "en", "sortBy": "publishedAt", "pageSize": 40, "apiKey": config.NEWSAPI_KEY})
-    r.raise_for_status()
-    out = []
-    for a in r.json().get("articles", []):
-        if a.get("url") and a.get("title"):
-            pub = None
-            try:
-                pub = datetime.strptime(a["publishedAt"][:19], "%Y-%m-%dT%H:%M:%S")
-            except Exception:
-                pass
-            out.append({"url": a["url"], "title": a["title"], "source": (a.get("source") or {}).get("name", "NewsAPI"),
-                        "snippet": _clean(a.get("description") or ""), "published": pub})
-    return out
-
 def seed_feeds(c):
+    for url in BROKEN_FEEDS:
+        db.run(c, "UPDATE feeds SET active=0 WHERE url=?", (url,))
     for name, url in DEFAULT_FEEDS:
         if not db.one(c, "SELECT id FROM feeds WHERE url=?", (url,)):
             db.run(c, "INSERT INTO feeds (name, url) VALUES (?,?)", (name, url))
@@ -108,54 +73,65 @@ def recent_issue_fingerprints(c, week):
     return [r["fingerprint"] for r in rows]
 
 def store(c, items, week):
-    """Insert new items; returns counts. Marks near-duplicates instead of dropping them, so the audit trail stays."""
+    """Insert new items; returns counts. Near-duplicates are marked, not dropped, so the audit trail stays.
+    All lookups are done in memory and all writes are batched: one round trip each, not one per article."""
     cutoff = datetime.utcnow() - timedelta(days=MAX_AGE_DAYS)
     past = recent_issue_fingerprints(c, week)
-    this_week = db.all(c, "SELECT id, fingerprint FROM articles WHERE week=? AND status!='dup'", (week,))
+    this_week = [(a["url_hash"], a["fingerprint"]) for a in db.all(c, "SELECT url_hash, fingerprint FROM articles WHERE week=? AND status!='dup'", (week,))]
+    known = {r["url_hash"] for r in db.all(c, "SELECT url_hash FROM articles")}
     stats = {"seen": 0, "new": 0, "dup": 0, "old": 0, "exists": 0}
+    rows, dup_links, now = [], [], config.now_ist().isoformat(timespec="seconds")
     for it in items:
         stats["seen"] += 1
         if it["published"] and it["published"] < cutoff:
             stats["old"] += 1; continue
         h = url_hash(it["url"])
-        if db.one(c, "SELECT id FROM articles WHERE url_hash=?", (h,)):
+        if h in known:
             stats["exists"] += 1; continue
+        known.add(h)
         fp = fingerprint(it["title"])
-        status, dup_of = "new", None
+        status, dup_hash = "new", None
         if any(similar(fp, p) for p in past):
             status = "dup"
         else:
-            m = next((a for a in this_week if similar(fp, a["fingerprint"])), None)
+            m = next((x for x in this_week if similar(fp, x[1])), None)
             if m:
-                status, dup_of = "dup", m["id"]
-        pub = it["published"].isoformat(timespec="seconds") if it["published"] else None
-        aid = db.insert(c, """INSERT INTO articles (url_hash, url, title, source, snippet, published_at, fetched_at, week, fingerprint, status, dup_of)
-                              VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-                        (h, canon(it["url"]), it["title"], it["source"], it["snippet"], pub,
-                         config.now_ist().isoformat(timespec="seconds"), week, fp, status, dup_of))
+                status, dup_hash = "dup", m[0]
         if status == "new":
-            this_week.append({"id": aid, "fingerprint": fp}); stats["new"] += 1
+            this_week.append((h, fp)); stats["new"] += 1
         else:
             stats["dup"] += 1
+            if dup_hash:
+                dup_links.append((dup_hash, h))
+        pub = it["published"].isoformat(timespec="seconds") if it["published"] else None
+        rows.append((h, canon(it["url"]), it["title"][:500], it["source"], it["snippet"], pub, now, week, fp, status))
+    db.many(c, """INSERT INTO articles (url_hash, url, title, source, snippet, published_at, fetched_at, week, fingerprint, status)
+                  VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(url_hash) DO NOTHING""", rows)
+    db.many(c, "UPDATE articles SET dup_of=(SELECT id FROM (SELECT id FROM articles WHERE url_hash=?) t) WHERE url_hash=?", dup_links)
     return stats
 
 def run_ingest():
+    """Fetch every source in parallel (so it fits a serverless time limit), then dedupe and store."""
+    from concurrent.futures import ThreadPoolExecutor
+    from app import sources
     week = config.week_start()
-    items, report = [], {}
     with db.conn() as c:
         seed_feeds(c)
         feeds = db.all(c, "SELECT name, url FROM feeds WHERE active=1")
-    for f in feeds:
+    def job(j):
+        label, fn, args = j
         try:
-            got = fetch_rss(f["name"], f["url"]); items += got; report[f["name"]] = len(got)
+            return label, fn(*args), None
         except Exception as e:
-            report[f["name"]] = f"error: {str(e)[:80]}"
-    for q in NEWS_QUERIES:
-        try:
-            got = fetch_newsapi(q); items += got; report[f"newsapi:{q}"] = len(got)
-        except Exception as e:
-            report[f"newsapi:{q}"] = f"error: {str(e)[:80]}"
+            return label, [], f"{type(e).__name__}: {str(e)[:60]}"
+    items, report = [], {}
+    with ThreadPoolExecutor(10) as ex:
+        for label, got, err in ex.map(job, sources.plan(feeds)):
+            items += got
+            report[label] = err or len(got)
     with db.conn() as c:
         stats = store(c, items, week)
-        db.log(c, "ingest", f"{stats} sources={report}")
-    return {"week": week, **stats, "sources": report}
+        db.log(c, "ingest", f"{stats}")
+    return {"week": week, **stats, "sources_ok": sum(1 for v in report.values() if isinstance(v, int) and v > 0),
+            "sources_failed": {k: v for k, v in report.items() if not isinstance(v, int)},
+            "sources_empty": [k for k, v in report.items() if v == 0], "per_source": {k: v for k, v in report.items() if isinstance(v, int) and v}}

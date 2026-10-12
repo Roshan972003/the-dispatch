@@ -78,6 +78,16 @@ def run(c, sql, args=()):
 def all(c, sql, args=()):
     return [dict(r) for r in run(c, sql, args).fetchall()]
 
+def many(c, sql, rows):
+    """Batched write: one round trip per batch instead of one per row (matters on a remote Postgres)."""
+    if not rows:
+        return
+    if PG:
+        with c.cursor() as cur:
+            cur.executemany(_q(sql), rows)
+    else:
+        c.executemany(sql, rows)
+
 def one(c, sql, args=()):
     r = run(c, sql, args).fetchone()
     return dict(r) if r else None
