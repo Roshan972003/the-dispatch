@@ -89,7 +89,7 @@ def select(sg, cands, recent):
     system = ("You are the editorial selector for The Dispatch, a weekly newsletter on the Indian startup ecosystem. "
               "You select; you do not write commentary in this step.")
     cj = "\n".join(json.dumps({"article_id": a["id"], "title": a["title"], "source": a["source"], "snippet": (a["snippet"] or "")[:240]}) for a in cands)
-    base = (f"From the candidate list, choose {config.PICK_MIN} to {config.PICK_MAX} stories that:\n"
+    base = (f"From the candidate list, choose exactly {config.PICK_TARGET} stories (never fewer than {config.PICK_MIN}) that:\n"
             "- each satisfy at least one filter: COUNTERINTUITIVE, UNDER-REPORTED, TREND-CONNECTING (definitions below)\n"
             f"- collectively cover at least {config.MIN_TOPICS} different topic areas\n"
             "- are not about a company-event already listed in RECENT_ISSUES\n"

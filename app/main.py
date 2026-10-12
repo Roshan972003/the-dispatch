@@ -62,7 +62,8 @@ async def telegram_webhook(request: Request):
     from app import telegram
     if request.headers.get("x-telegram-bot-api-secret-token") != config.TELEGRAM_WEBHOOK_SECRET:
         raise HTTPException(403)
-    telegram.handle_update(await request.json())
+    from fastapi.concurrency import run_in_threadpool
+    await run_in_threadpool(telegram.handle_update, await request.json())     # blocking work must not stall the event loop (the next tap would queue behind it)
     return {"ok": True}
 
 # ---------------- subscribers ----------------

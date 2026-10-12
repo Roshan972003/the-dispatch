@@ -27,6 +27,7 @@ PUBLIC_URL = env("PUBLIC_URL") or (f"https://{env('VERCEL_PROJECT_PRODUCTION_URL
 
 # Editorial rules from the brief
 PICK_MIN, PICK_MAX = 8, 10
+PICK_TARGET = 10          # the brief allows 8 to 10; the editorial pass aims for the full 10
 MIN_TOPICS = 3
 LOOKBACK_ISSUES = 4
 DB_PATH = ROOT / "data" / "dispatch.db"

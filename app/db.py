@@ -1,4 +1,4 @@
-import sqlite3
+import sqlite3, time
 from contextlib import contextmanager
 from app import config
 
@@ -54,39 +54,92 @@ import threading
 _SETUP_LOCK = threading.Lock()
 _READY = False
 
-@contextmanager
-def conn():
-    global _READY
+_local = threading.local()
+IDLE_PING_S = 15        # a reused connection idle longer than this is checked before use (Neon closes idle pooled connections)
+
+def _connect():
     if PG:
         import psycopg
         from psycopg.rows import dict_row
-        c = psycopg.connect(config.DATABASE_URL, row_factory=dict_row)
-    else:
-        config.DB_PATH.parent.mkdir(exist_ok=True)
-        c = sqlite3.connect(config.DB_PATH)
-        c.row_factory = sqlite3.Row
-    if not _READY:
-        with _SETUP_LOCK:               # one thread sets up the schema; the rest wait, then skip
-            if not _READY:
-                if PG:
-                    c.execute("SELECT pg_advisory_xact_lock(727201)")     # also serialises separate serverless instances
-                    c.execute(PG_SCHEMA)
-                else:
-                    c.executescript(SCHEMA)
-                for t, col, typ in MIGRATIONS:
-                    if PG:
-                        have = c.execute("SELECT 1 FROM information_schema.columns WHERE table_name=%s AND column_name=%s", (t, col)).fetchone()
-                        if not have:    # ALTER ... IF NOT EXISTS still takes a heavy lock even when it does nothing, so only run it when needed
-                            c.execute(f"ALTER TABLE {t} ADD COLUMN IF NOT EXISTS {col} {typ}")
-                    elif col not in {r[1] for r in c.execute(f"PRAGMA table_info({t})")}:
-                        c.execute(f"ALTER TABLE {t} ADD COLUMN {col} {typ}")
-                c.commit()
-                _READY = True
+        return psycopg.connect(config.DATABASE_URL, row_factory=dict_row)
+    config.DB_PATH.parent.mkdir(exist_ok=True)
+    c = sqlite3.connect(config.DB_PATH)
+    c.row_factory = sqlite3.Row
+    return c
+
+def _setup(c):
+    global _READY
+    if _READY:
+        return
+    with _SETUP_LOCK:               # one thread sets up the schema; the rest wait, then skip
+        if _READY:
+            return
+        if PG:
+            c.execute("SELECT pg_advisory_xact_lock(727201)")     # also serialises separate serverless instances
+            c.execute(PG_SCHEMA)
+        else:
+            c.executescript(SCHEMA)
+        for t, col, typ in MIGRATIONS:
+            if PG:
+                have = c.execute("SELECT 1 FROM information_schema.columns WHERE table_name=%s AND column_name=%s", (t, col)).fetchone()
+                if not have:        # ALTER ... IF NOT EXISTS still takes a heavy lock even when it does nothing, so only run it when needed
+                    c.execute(f"ALTER TABLE {t} ADD COLUMN IF NOT EXISTS {col} {typ}")
+            elif col not in {r[1] for r in c.execute(f"PRAGMA table_info({t})")}:
+                c.execute(f"ALTER TABLE {t} ADD COLUMN {col} {typ}")
+        c.commit()
+        _READY = True
+
+def _acquire():
+    """Postgres: reuse this thread's connection (saves a TLS + auth handshake on every Telegram tap and page load). SQLite: a fresh one."""
+    if not PG:
+        c = _connect(); _setup(c); return c
+    c = getattr(_local, "cached", None)
+    if c is not None and not c.closed and not c.broken:
+        if time.time() - getattr(_local, "used", 0) > IDLE_PING_S:
+            try:
+                c.execute("SELECT 1"); c.rollback()
+            except Exception:
+                _drop()
+                c = None
+        if c is not None:
+            return c
+    c = _connect(); _setup(c)
+    _local.cached = c
+    return c
+
+def _drop():
+    c = getattr(_local, "cached", None)
+    _local.cached = None
+    try:
+        if c is not None:
+            c.close()
+    except Exception:
+        pass
+
+@contextmanager
+def conn():
+    if getattr(_local, "depth", 0):             # re-entrant: a nested block shares the outer connection and transaction
+        _local.depth += 1
+        try:
+            yield _local.cur
+        finally:
+            _local.depth -= 1
+        return
+    c = _acquire()
+    _local.depth, _local.cur = 1, c
     try:
         yield c
         c.commit()
+    except BaseException:
+        try:
+            c.rollback()
+        except Exception:
+            _drop()
+        raise
     finally:
-        c.close()
+        _local.depth, _local.cur, _local.used = 0, None, time.time()
+        if not PG:
+            c.close()
 
 def _q(sql):
     return sql.replace("?", "%s") if PG else sql

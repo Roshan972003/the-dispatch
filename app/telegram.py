@@ -427,26 +427,58 @@ def add_url(url):
     say(f"✅ <b>Added:</b> {h(title[:120])}\nSignal {ev['signal']}/100 · {h(ev['topic'])} · {h(ev['filter'].lower())}\n<i>{h(ev['reason'])}</i>{warn}\n\n{when}")
 
 # ---------------- update router ----------------
+SUCCESS_NOTES = {"Kept.", "Pick a replacement.", "Swapped.", "Kept the original.", "Rewritten.", "Restored original.", "Reply to the prompt below.", "Reply with a voice note.",
+                 "Angles sent.", "Please confirm below.", "Confirmed.", "Reopened.", "Cancelled. Nothing will be sent.", "Deadline pushed to Thursday 7 AM."}
+
+def _first_delivery(uid):
+    """Telegram re-delivers an update when a webhook is slow or errors. Each update_id is processed once."""
+    import time
+    with db.conn() as c:
+        cur = db.run(c, "INSERT INTO kv (k, v) VALUES (?,?) ON CONFLICT(k) DO NOTHING", (f"upd:{uid}", str(int(time.time()))))
+        if uid % 40 == 0:        # housekeeping: forget updates older than a day
+            db.run(c, "DELETE FROM kv WHERE k LIKE ? AND CAST(v AS BIGINT) < ?", ("upd:%", int(time.time()) - 86400))
+        return cur.rowcount == 1
+
 def handle_update(u):
+    """Never raises: a failure is logged and reported in the chat, and the webhook still answers 200 so Telegram does not retry."""
+    uid = u.get("update_id")
+    try:
+        if isinstance(uid, int) and not _first_delivery(uid):
+            return
+        _handle(u)
+    except Exception as e:
+        try:
+            with db.conn() as c:
+                db.log(c, "tg_error", f"{type(e).__name__}: {str(e)[:300]}")
+        except Exception:
+            pass
+        try:
+            say(f"⚠️ Something went wrong with that tap ({h(type(e).__name__)}). Please try again.", disable_notification=True)
+        except Exception:
+            pass
+
+def _handle(u):
     if "callback_query" in u:
         q = u["callback_query"]
         if str(q["message"]["chat"]["id"]) != str(config.TELEGRAM_CHAT_ID):
             return
+        try:        # acknowledge immediately: the button stops spinning at once, whatever the work behind it takes
+            api("answerCallbackQuery", callback_query_id=q["id"])
+        except Exception:
+            pass    # stale or duplicate tap: carry on, the action itself is still valid
         parts = q["data"].split(":")
         act, args = parts[0], [int(x) for x in parts[1:] if x.lstrip("-").isdigit()]
         fn = {"keep": do_keep, "tune": do_tune, "reset": do_reset, "swap": do_swap_menu, "pick": do_swap_pick, "back": do_back, "edit": ask_edit, "voice": ask_voice, "ang": show_angles, "subj": do_subject,
               "confirm": ask_confirm, "push": do_push, "yes": do_confirm, "reopen": do_reopen, "no": lambda a: "Cancelled. Nothing will be sent."}.get(act)
-        slow = act in ("swap", "voice", "tune")     # may call Gemini or Telegram files: acknowledge the tap first so the button stops spinning
-        if slow:
-            api("answerCallbackQuery", callback_query_id=q["id"], text="One moment…")
-        try:
-            note = fn(*args) if fn else "Unknown action."
-        except Exception as e:
-            note = f"Error: {str(e)[:150]}"
-        if not slow:
-            api("answerCallbackQuery", callback_query_id=q["id"], text=note)
-        elif note not in ("Pick a replacement.", "Reply with a voice note.", "Rewritten."):
-            say(note)
+        if act in ("keep", "tune", "reset", "swap", "pick", "back", "edit", "voice", "ang") and args:
+            with db.conn() as c:
+                alive = db.one(c, "SELECT id FROM issue_items WHERE id=? AND kind='selected'", (args[0],))
+            if not alive:           # an old card whose draft was regenerated: say so instead of failing
+                say("ℹ️ That card belongs to an older draft. Send /draft to get the current one.", disable_notification=True)
+                return
+        note = fn(*args) if fn else "Unknown action."
+        if note and note not in SUCCESS_NOTES and not note.startswith("Subject set"):
+            say("ℹ️ " + h(note), disable_notification=True)         # the tap could not be applied: say why instead of failing silently
         return
     m = u.get("message")
     if not m or str(m["chat"]["id"]) != str(config.TELEGRAM_CHAT_ID):
