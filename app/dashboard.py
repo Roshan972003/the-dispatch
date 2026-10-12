@@ -188,6 +188,10 @@ def state(fresh=False):
     with ThreadPoolExecutor(6) as ex:
         f = [ex.submit(_q_issue, week), ex.submit(_q_articles, week), ex.submit(_q_subs), ex.submit(_q_misc, week), ex.submit(_q_memory, week), ex.submit(_q_engagement)]
         (issue, items, linkcheck), (arts, counts, total_articles), (sub_counts, subs, issues_sent, series), (sends, events, last, sg, edits, extras), mem, engagement = [x.result() for x in f]
+    if linkcheck:        # a link check only counts for the draft it was run on: after a swap or re-draft it is stale, so show it as not run
+        now_urls = {i["url"] for i in items if i["kind"] == "selected"}
+        if {r["url"] for r in linkcheck.get("rows", [])} != now_urls:
+            linkcheck = None
     dup_in_week, dup_past = counts.pop("_dup_in_week", 0), counts.pop("_dup_past", 0)
     n_scored, n_strong, n_short = counts.pop("_scored", 0), counts.pop("_strong", 0), counts.pop("_short", 0)
     for x in subs:                      # subscriber addresses are never shown in full
