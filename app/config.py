@@ -21,7 +21,8 @@ RESEND_FROM = env("RESEND_FROM", "The Dispatch <onboarding@resend.dev>")
 RESEND_WEBHOOK_SECRET = env("RESEND_WEBHOOK_SECRET")
 CRON_SECRET = env("CRON_SECRET")
 ADMIN_PASSWORD = env("ADMIN_PASSWORD")
-PUBLIC_URL = env("PUBLIC_URL", "http://localhost:8000")
+# Vercel provides VERCEL_PROJECT_PRODUCTION_URL automatically, so no manual setting is needed in production
+PUBLIC_URL = env("PUBLIC_URL") or (f"https://{env('VERCEL_PROJECT_PRODUCTION_URL')}" if env("VERCEL_PROJECT_PRODUCTION_URL") else "http://localhost:8000")
 
 # Editorial rules from the brief
 PICK_MIN, PICK_MAX = 8, 10
