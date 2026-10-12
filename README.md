@@ -16,7 +16,7 @@ An automated pipeline for **The Dispatch**, Shreya's weekly newsletter on the In
 ## The weekly flow
 
 ```
-Mon-Wed 8:00 AM IST   ingest 20 RSS feeds + NewsAPI + GNews + NewsData + Google News + GDELT, de-duplicate, store in Neon
+Mon-Wed 8:00 AM IST   ingest 14 live RSS feeds + 13 Google News searches + NewsAPI, GNews and NewsData queries (+ GDELT, Hacker News), de-duplicate, store in Neon
 Wed     2:00 PM IST   Gemini pre-screens every headline, picks 10 stories across 3+ sectors, drafts each take in Shreya's voice
 Wed     afternoon     the draft lands in Telegram: Keep / Swap / Edit / Voice / Angles on every story card
 Wed    10:00 PM IST   still unconfirmed? a loud, pinned reminder with "Confirm" and "Push deadline" buttons
@@ -39,7 +39,7 @@ Nothing is ever emailed without her explicit, two-step confirmation (see *Safegu
 | No confirmation by Wednesday 10 PM → send a reminder | cron `30 16 * * 3` (22:00 IST) → `telegram.send_reminder` |
 | Unsubscribes and bounces handled gracefully | One-click unsubscribe (page + `List-Unsubscribe` header), hard bounces and spam complaints switch addresses off via a signed Resend webhook, temporary bounces don't; unknown or preview links end on a friendly page, never an error |
 | All AI tasks use Gemini Flash, not Claude | [`app/gemini.py`](app/gemini.py): `gemini-3.8-flash` only; no other AI provider anywhere in the code |
-| Live external data; works with data at submission | Live feeds and APIs; the Neon database holds a real week of articles and a drafted issue |
+| Live external data; works with data at submission | 41 live source jobs per run (14 active RSS feeds, Google News searches and news APIs); the Neon database holds a real week of articles and a drafted issue |
 | Deployed on Vercel | FastAPI on Vercel ([`index.py`](index.py)), Vercel Cron for the schedule |
 
 ## What the dashboard shows
@@ -77,6 +77,7 @@ Useful scripts: `scripts/import_subscribers.py` (import Shreya's real list as ac
 
 ## Honest limits
 
+- **RSS feeds.** 20 feeds are registered; 14 are active. Six (Moneycontrol, Business Standard, VCCircle, Tracxn, Analytics India Magazine and a duplicate Entrackr address) block automated readers or are dead, so they are switched off. All 14 active feeds returned articles in the last live run.
 - **Sample data.** The subscriber list in the demo is generated (2,200 active test addresses, tagged `sample`); Shreya's real list is imported with one command. Sample addresses are capped at 25 per send so a demo never burns the email quota.
 - **Sending domain.** Mail is sent from Resend's shared test address, which can only deliver to the Resend account owner. Reaching real subscribers needs a domain verified in Resend. Until then, new sign-ups are added instantly instead of by confirmation email.
 - **Vercel Hobby cron** runs each job at some point in the hour after its scheduled time, so "10 PM" is 10 to 11 PM and "Wednesday 2 PM" is 2 to 3 PM IST. Never early.

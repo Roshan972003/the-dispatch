@@ -66,13 +66,13 @@
 <script>
 const COLS = ["Trigger", "Input", "Processing", "AI", "Context", "Output"];
 // lane: name, sub-label
-const LANES = [["Scheduler", "Vercel Cron"], ["RSS feeds", "20 feeds"], ["News APIs", "Keyed + keyless"], ["Dispatch app", "Rules + routing"], ["Gemini Flash", "Editor"], ["Neon database", "Memory"],
+const LANES = [["Scheduler", "Vercel Cron"], ["RSS feeds", "14 live feeds"], ["News APIs", "Keyed + keyless"], ["Dispatch app", "Rules + routing"], ["Gemini Flash", "Editor"], ["Neon database", "Memory"],
                ["Telegram", "Review chat"], ["Shreya", "Editor"], ["Resend", "Email"], ["Subscriber", "Reader"], ["Dashboard", "Control center"]];
 // id, lane, column, title, lines
 const STEPS = [
   [1, 0, 0, "Weekly schedule", "Mon&ndash;Wed 8 AM ingest<br>Wed 2 PM pick &middot; Thu 8 AM send"],
-  [2, 1, 1, "RSS feeds", "20 Indian startup and<br>business news feeds"],
-  [3, 2, 1, "News APIs", "NewsAPI &middot; GNews &middot; NewsData<br>Google News &middot; GDELT"],
+  [2, 1, 1, "RSS feeds", "14 live Indian startup and<br>business news feeds"],
+  [3, 2, 1, "News APIs", "NewsAPI &middot; GNews &middot; NewsData<br>Google News &middot; GDELT &middot; HN"],
   [4, 3, 2, "Ingests and cleans", "no repeats: same link, same story,<br>last 4 issues; repeat guard"],
   [5, 4, 3, "Picks 10, writes the take", "3+ sectors; Shreya's voice;<br>best of three drafts"],
   [6, 5, 4, "Saves everything", "articles, drafts, edits,<br>subscribers, style guide"],

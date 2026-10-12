@@ -282,7 +282,7 @@ function command(){
   const ap=S.approval.map(a=>`<div class="ap c-${colors[a.key]} ${a.state}"><div class="k">${icon[a.key]} ${esc(a.label)}</div><div class="t">${a.ts?esc(short(a.ts)):(a.state==='skipped'?'skipped':'pending')}</div><div class="nt">${esc(a.note)}</div></div>`).join('');
   const picked=sel().filter(i=>i.signal!=null),rest=S.articles.filter(a=>a.signal!=null&&a.status==='new');
   const avg=picked.length?Math.round(picked.reduce((a,b)=>a+b.signal,0)/picked.length):null,avr=rest.length?Math.round(rest.reduce((a,b)=>a+b.signal,0)/rest.length):'—';
-  const st=S.issue?S.issue.status:'collecting',HD={collecting:['Collecting this week’s stories','The pipeline reads 20 news feeds and several news APIs every Monday to Wednesday. On Wednesday afternoon Gemini picks the ten best and drafts your take on each.'],
+  const st=S.issue?S.issue.status:'collecting',HD={collecting:['Collecting this week’s stories','The pipeline reads the RSS feeds and news APIs every Monday to Wednesday. On Wednesday afternoon Gemini picks the ten best and drafts your take on each.'],
    drafted:['Your draft is ready. Review it in Telegram.','Ten stories, each with a take in your voice. Keep, swap or edit any of them, then confirm. Nothing goes to subscribers until you do.'],
    approved:['You’ve confirmed this issue.','It goes to your subscribers on Thursday at 8:00 AM IST. You can still reopen it in Telegram until then.'],
    sending:['Sending now.','The issue is going out to your subscribers.'],sent:['This issue has gone out.','Delivered to your active subscribers. Next week’s collection starts Monday.']}[S.issue?S.issue.status:'collecting']||['This week’s issue',''];
