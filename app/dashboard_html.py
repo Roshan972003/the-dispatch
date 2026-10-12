@@ -193,6 +193,19 @@ tr:hover td{background:rgba(184,134,43,.05)}
 .trk b{display:block;margin-top:12px;font:700 14.5px var(--sans);color:#F6F0E1}.trk span{display:block;font:13px/1.45 var(--sans);color:#B9B09C;margin-top:3px;max-width:190px}
 .trk .now b{color:#E4C77C}
 @media(max-width:900px){.trk{flex-direction:column;gap:18px}.trk .st::before{display:none}.hero h1{font-size:30px}.hero .stats{gap:26px}}
+
+/* ---- readability fixes ---- */
+.feed .r{grid-template-columns:104px 160px 1fr;align-items:center;font:13.5px/1.45 var(--sans)}.feed .r .chip{white-space:nowrap;display:inline-block}
+@media(max-width:700px){.feed .r{grid-template-columns:1fr;gap:3px}}
+.flow{display:flex;align-items:stretch;gap:0}
+.fc{flex:1;min-width:0;border:1px solid var(--line);border-radius:18px;padding:22px 18px;background:linear-gradient(180deg,#fff,#FFFBF1);text-align:center}
+[data-theme=dark] .fc,:root:not([data-theme=light]) .fc{background:var(--card2)}
+.fc .fn{font:600 46px/1 var(--serif);letter-spacing:-.02em;color:var(--ink)}.fc .ft{font:700 14.5px var(--sans);margin-top:12px}.fc .fd{font:13px/1.45 var(--sans);color:var(--mut);margin-top:5px}
+.fc.last{background:linear-gradient(135deg,#14120F,#2a2216);border-color:rgba(212,169,74,.5)}.fc.last .fn{color:#E4C77C}.fc.last .ft{color:#F6F0E1}.fc.last .fd{color:#B9B09C}
+.fa{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 8px;color:var(--acc);font:700 22px var(--sans);min-width:56px}.fa span{font:700 12px var(--sans);color:var(--bad);margin-bottom:2px;min-height:15px}
+@media(max-width:900px){.flow{flex-direction:column}.fa{flex-direction:row;gap:8px;padding:8px 0;transform:rotate(90deg)}.fa span{transform:rotate(-90deg)}}
+.tb{display:grid;gap:12px;margin-top:4px}.tr2{display:grid;grid-template-columns:minmax(120px,190px) 1fr 24px;gap:14px;align-items:center;font-size:14.5px}
+.tr2 .tt{height:12px;border-radius:99px;background:var(--soft);overflow:hidden}.tr2 .tt i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#B8862B,#E0BC63)}.tr2 .tc{font-weight:700;text-align:right}
 </style></head><body>
 <header><div class="bar"><div class="brand">The Dispatch<small>Shreya’s editorial desk</small></div><span class="sp"></span><span class="pill" id="wk"></span><span class="pill" id="st"></span><button class="act sm" id="kbtn" style="font-family:var(--mono)" title="Command palette">⌘K</button><button class="ibtn" id="theme" title="Light / dark">◐</button></div>
 <div class="banner" id="banner"></div><nav id="tabs"></nav></header>
@@ -236,6 +249,7 @@ function banner(){
 }
 setInterval(()=>{const c=$('#cd');if(c&&S)c.textContent=fmt(remaining())},1000);
 
+function topicBars(axes){const rows=[...axes].filter(a=>a.n).sort((x,y)=>y.n-x.n),mx=Math.max(1,...rows.map(r=>r.n));return `<div class="tb">`+rows.map(r=>`<div class="tr2"><span class="tn">${esc(r.topic)}</span><span class="tt"><i style="width:${r.n/mx*100}%"></i></span><span class="tc">${r.n}</span></div>`).join('')+`</div>`}
 function radar(axes){
   const N=axes.length,cx=150,cy=140,R=95,mx=Math.max(3,...axes.map(a=>a.n)),pt=(i,v)=>{const a=-Math.PI/2+2*Math.PI*i/N;return[cx+Math.cos(a)*R*v,cy+Math.sin(a)*R*v]};
   const ring=k=>axes.map((_,i)=>pt(i,k).join(',')).join(' ');
@@ -255,8 +269,10 @@ function sigRing(v){const c=v==null?'var(--mut)':v>=70?'var(--acc)':'var(--mut)'
   return `<svg class="ring" viewBox="0 0 74 74"><circle cx="37" cy="37" r="${r}" fill="none" stroke="var(--soft)" stroke-width="7"/><circle cx="37" cy="37" r="${r}" fill="none" stroke="${c}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${L*p/100} ${L}" transform="rotate(-90 37 37)"/><text x="37" y="42" text-anchor="middle" font-size="17" font-family="var(--serif)" fill="var(--ink)">${v==null?'—':v}</text></svg>`}
 
 function funnel(){
-  const F=S.funnel,mx=Math.max(1,F[0].n);
-  return `<div class="fun">`+F.map((f,i)=>{const lost=i?F[i-1].n-f.n:0;return `<div class="row"><div class="lab">${esc(f.label)}<small>${esc(f.note)}</small></div><div class="bar" style="width:${Math.max(6,f.n/mx*100)}%">${f.n}</div></div>${lost>0?`<div class="drop">${lost} set aside</div>`:''}`}).join('')+`</div>`;
+  const F=S.funnel,short={0:'Articles read',1:'Unique stories',2:'Rated by Gemini',3:'Shortlist',4:'Your issue'},
+   line=[`Everything collected this week`,`After removing repeats`,`Each one scored 0 to 100 for usefulness`,`The highest-scoring stories`,`The final stories you review`];
+  return `<div class="flow">`+F.map((f,i)=>{const lost=i?F[i-1].n-f.n:0;return `${i?`<div class="fa"><span>${lost>0?'−'+lost:''}</span>→</div>`:''}<div class="fc ${i===F.length-1?'last':''}"><div class="fn">${f.n}</div><div class="ft">${short[i]||esc(f.label)}</div><div class="fd">${line[i]}</div></div>`}).join('')+`</div>
+   <details class="dv" style="margin-top:18px"><summary>See exactly what happened at each step</summary><ul>${F.map(f=>`<li><b>${esc(f.label)} (${f.n}).</b> ${esc(f.note)}</li>`).join('')}</ul></details>`;
 }
 function command(){
   const k=S.kpis,B=S.balance,steps=S.stages.map((s,n)=>`<div class="step ${s.state}"><div class="c">${s.state==='done'?'✓':n+1}</div><div class="t">${esc(s.label)}</div><div class="d">${esc(s.detail)}</div></div>`).join('');
@@ -272,18 +288,18 @@ function command(){
   const hero=`<div class="hero"><div class="eyebrow">Week of ${esc(S.week)}</div><h1>${HD[0]}</h1><p>${HD[1]}</p><div class="stats"><div><b>${k.articles_week}</b><span>articles read this week</span></div><div><b>${k.selected}</b><span>stories in the draft</span></div><div><b>${k.duplicates}</b><span>repeats filtered out</span></div><div><b>${k.subscribers}</b><span>active subscribers</span></div></div><div class="trk">${[['Collect','Mon to Wed: feeds and news APIs, repeats removed.'],['Pick &amp; write','Wed: Gemini chooses 10 stories and drafts your take.'],['You confirm','In Telegram. Nothing is sent without your yes.'],['Send','Thursday 8 AM IST to your subscribers.']].map((x,i)=>`<div class="st ${i<ix?'done':i===ix?'now':''}"><div class="dt">${i<ix?'✓':i+1}</div><b>${x[0]}</b><span>${x[1]}</span></div>`).join('')}</div></div>
   <div style="height:18px"></div>`;
   return hero+`<div class="card"><h2>Approval status</h2><p class="sub">The Wednesday evening pipeline, live from the database.</p><div class="appr">${ap}</div></div>
-  <div class="card" style="margin-top:16px"><h2>From ${S.funnel[0].n} articles to ${S.kpis.selected} stories</h2><p class="sub">Read it top to bottom. Each bar shows how many stories are left after that step. The “All articles” tab lists every article with the reason it was kept or dropped.</p>${funnel()}</div>
+  <div class="card" style="margin-top:16px"><h2>From ${S.funnel[0].n} articles to ${S.kpis.selected} stories</h2><p class="sub">Think of it as a sieve: lots of articles go in, and only the best ten come out. The small red number between two boxes is how many were removed at that step.</p>${funnel()}</div>
   <div class="card" style="margin-top:16px"><h2>This week’s pipeline</h2><p class="sub">Monday to Wednesday collection, Wednesday selection, your confirmation, Thursday delivery.</p><div class="steps">${steps}</div></div>
   <div class="grid g6">${kpi(k.articles_week,'articles ingested','')}${kpi(k.duplicates,'duplicates caught',S.memory.dup_in_week+' in-week · '+S.memory.dup_past+' vs past issues')}${kpi(k.sources_ok+'/'+k.sources_total,'sources live','RSS · Google News · 3 APIs')}
    ${kpi(S.scored,'scored by Gemini','signal 0–100')}${kpi(avg==null?'—':avg,'avg signal of picks','vs '+avr+' for the rest')}${kpi(k.subscribers,'active subscribers','target 2,200')}</div>
-  <div class="grid g2"><div class="card"><h3>Topic diversity radar</h3><div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">${radar(B.axes)}<div class="list" style="flex:1;min-width:190px">
-    <div class="r"><span>Stories picked</span><span>${B.count} ${B.count_ok?'<span class="chip ok">8–10 ✓</span>':'<span class="chip bad">need 8–10</span>'}</span></div>
-    <div class="r"><span>Distinct sectors</span><span>${B.topics} ${B.topics_ok?'<span class="chip ok">≥3 ✓</span>':'<span class="chip bad">need ≥3</span>'}</span></div></div></div></div>
+  <div class="grid g2"><div class="card"><h2>Topics in this issue</h2><p class="sub">The brief asks for at least three different topics. Here is how the ten stories spread out.</p>${topicBars(B.axes)}<div class="list" style="margin-top:14px">
+    <div class="r"><span>Stories picked</span><span>${B.count} ${B.count_ok?'<span class="chip ok">needs 8 to 10 ✓</span>':'<span class="chip bad">needs 8 to 10</span>'}</span></div>
+    <div class="r"><span>Different topics</span><span>${B.topics} ${B.topics_ok?'<span class="chip ok">needs at least 3 ✓</span>':'<span class="chip bad">needs at least 3</span>'}</span></div></div></div>
    <div class="card"><h3>Next scheduled runs (IST)</h3><div class="list">${S.next_runs.map(r=>`<div class="r"><span>${esc(r.label)}</span><span>${when(r.at)}</span></div>`).join('')}</div>
     <h3 style="margin-top:18px">Run a step manually</h3><div class="acts"><button class="act" data-run="ingest">Fetch articles</button><button class="act pri" data-run="select">Run Gemini selection</button><button class="act" data-run="draft">Re-send draft to Telegram</button></div><div class="note" id="note"></div>
     <div class="guard"><span>🔒</span><span>No send button exists here by design. The newsletter is emailed only after you confirm in Telegram.</span></div></div></div>
   <div class="grid g2"><div class="card"><h3>Where the articles came from</h3>${bars(S.sources.slice(0,8))}</div>
-   <div class="card"><h3>Activity log</h3><div class="feed">${S.events.slice(0,9).map(e=>`<div class="r"><span class="mut">${esc(short(e.ts))}</span><span><span class="chip">${esc(e.kind)}</span></span><span class="mut">${esc((e.detail||'').slice(0,110))}</span></div>`).join('')}</div></div></div>`;
+   <div class="card"><h3>Activity log</h3><div class="feed">${S.events.slice(0,9).map(e=>`<div class="r"><span class="mut">${esc(short(e.ts))}</span><span><span class="chip">${esc(({select:'Stories picked',telegram_draft:'Sent to Telegram',approved:'You confirmed',tuner:'Voice settings',group_registered:'Group connected',reopened:'You reopened it'}[e.kind])||String(e.kind).replace(/_/g,' '))}</span></span><span class="mut">${esc((e.detail||'').replace(/, flag=None/,'').replace(/[{}"]/g,'').replace(/: /g,' ').slice(0,110))}</span></div>`).join('')}</div></div></div>`;
 }
 
 const ACC={free:['ok','🟢 free access'],soft:['warn','🟡 soft paywall'],hard:['bad','🔴 hard paywall'],dead:['bad','🔴 dead link'],unknown:['','⚪ unverified']};
