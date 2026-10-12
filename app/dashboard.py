@@ -78,7 +78,7 @@ def _q_subs():
         reasons = db.all(c, "SELECT COALESCE(unsub_reason, 'No reason given') AS r, COUNT(*) AS n FROM subscribers WHERE status='unsubscribed' GROUP BY COALESCE(unsub_reason, 'No reason given')")
     return sub_counts, subs, sent, {"joined": joined, "left": left, "reasons": reasons}
 
-def _q_misc():
+def _q_misc(week):
     from app import styleguide
     with db.conn() as c:
         sends = db.all(c, """SELECT s.week, s.status, s.sent_at, SUM(CASE WHEN x.status='sent' THEN 1 ELSE 0 END) AS sent,
@@ -89,9 +89,9 @@ def _q_misc():
         sg = styleguide.active(c)
         edits = db.one(c, "SELECT COUNT(*) AS n, SUM(CASE WHEN promoted=0 THEN 1 ELSE 0 END) AS pending FROM edits")
         from app.select_stories import get_tuner
-        tr = db.kv_get(c, f"trends:{config.week_start()}")
+        tr = db.kv_get(c, f"trends:{week}")
         all_weeks = [r["week"] for r in db.all(c, "SELECT week FROM issues ORDER BY week")]
-        rd = db.kv_get(c, f"repeat_dropped:{config.week_start()}")
+        rd = db.kv_get(c, f"repeat_dropped:{week}")
         extras = {"tuner": get_tuner(c), "trends": json.loads(tr) if tr else None, "editions": {w: n + 1 for n, w in enumerate(all_weeks)}, "snooze": db.kv_get(c, "snooze_until"), "repeat_dropped": json.loads(rd) if rd else []}
     return sends, events, last, sg, edits, extras
 
@@ -171,13 +171,22 @@ def entities(title):
 
 _cache = {"at": 0, "data": None}
 
+def _view_week(week):
+    """If the new week has not started yet (no issue, almost no articles), show the latest edition instead of an empty page."""
+    with db.conn() as c:
+        has_issue = db.one(c, "SELECT 1 AS x FROM issues WHERE week=?", (week,))
+        n = db.one(c, "SELECT COUNT(*) AS n FROM articles WHERE week=?", (week,))["n"]
+        last = None if has_issue or n >= 20 else db.one(c, "SELECT week FROM issues WHERE week < ? ORDER BY week DESC LIMIT 1", (week,))
+    return (last["week"], True) if last else (week, False)
+
 def state(fresh=False):
     """Four independent query groups run in parallel (each on its own connection); the result is cached for 15 s."""
     if not fresh and _cache["data"] and time.time() - _cache["at"] < 15:
         return _cache["data"]
-    now, week = config.now_ist(), config.week_start()
+    now = config.now_ist()
+    week, viewing_past = _view_week(config.week_start())
     with ThreadPoolExecutor(6) as ex:
-        f = [ex.submit(_q_issue, week), ex.submit(_q_articles, week), ex.submit(_q_subs), ex.submit(_q_misc), ex.submit(_q_memory, week), ex.submit(_q_engagement)]
+        f = [ex.submit(_q_issue, week), ex.submit(_q_articles, week), ex.submit(_q_subs), ex.submit(_q_misc, week), ex.submit(_q_memory, week), ex.submit(_q_engagement)]
         (issue, items, linkcheck), (arts, counts, total_articles), (sub_counts, subs, issues_sent, series), (sends, events, last, sg, edits, extras), mem, engagement = [x.result() for x in f]
     dup_in_week, dup_past = counts.pop("_dup_in_week", 0), counts.pop("_dup_past", 0)
     n_scored, n_strong, n_short = counts.pop("_scored", 0), counts.pop("_strong", 0), counts.pop("_short", 0)
@@ -197,8 +206,8 @@ def state(fresh=False):
         {"key": "dedupe", "label": "Dedupe", "state": "done" if counts else "todo", "detail": f"{counts.get('dup', 0)} duplicates caught"},
         {"key": "select", "label": "Gemini picks", "state": "done" if sel else "todo", "detail": f"{len(sel)} stories, {len({i['topic'] for i in sel})} topics" if sel else "Wednesday 2:00 PM"},
         {"key": "draft", "label": "Draft to Telegram", "state": "done" if rank >= 1 else "todo", "detail": "sent for review" if rank >= 1 else "after selection"},
-        {"key": "review", "label": "Shreya reviews", "state": "done" if rank >= 2 else ("active" if rank == 1 else "todo"), "detail": f"{reviewed}/{len(sel)} stories ticked" if sel else "waiting"},
-        {"key": "confirm", "label": "Confirmed", "state": "done" if rank >= 2 else "todo", "detail": (issue or {}).get("approved_at") or "waiting for Shreya"},
+        {"key": "review", "label": "You review", "state": "done" if rank >= 2 else ("active" if rank == 1 else "todo"), "detail": f"{reviewed}/{len(sel)} stories ticked" if sel else "waiting"},
+        {"key": "confirm", "label": "Confirmed", "state": "done" if rank >= 2 else "todo", "detail": (issue or {}).get("approved_at") or "waiting for you"},
         {"key": "send", "label": "Emailed", "state": "done" if status == "sent" else ("active" if status in ("approved", "sending") else "todo"),
          "detail": (issue or {}).get("sent_at") or ("queued for Thursday 8:00 AM" if status == "approved" else "Thursday")},
     ]
@@ -218,7 +227,7 @@ def state(fresh=False):
             except Exception:
                 i[k] = []
     for i in items:
-        i["checks"] = voice_checks(i["commentary"] or "", i["title"], i["snippet"] or "", sg["banned"]) if i["kind"] == "selected" else []
+        i["checks"] = voice_checks(i["commentary"] or "", i["title"], (i["snippet"] or "") + " " + (i.get("source_text") or ""), sg["banned"]) if i["kind"] == "selected" else []
     # archive matrix: topic x week, plus entity overlap between this week's picks and the previous four issues
     weeks = sorted({m["week"] for m in mem}, reverse=True)
     matrix = {}
@@ -268,14 +277,14 @@ def state(fresh=False):
     is_confirmed = bool(approved and status in ("approved", "sending", "sent"))
     active = sub_counts.get("active", 0)
     checks = [
-        {"label": "Shreya has explicitly confirmed (approved_at is set)", "ok": is_confirmed, "detail": "required, enforced in mailer.send_issue()"},
+        {"label": "You have explicitly confirmed (approved_at is set)", "ok": is_confirmed, "detail": "required, enforced in mailer.send_issue()"},
         {"label": "Active recipients on the list", "ok": active > 0, "detail": f"{active} active"},
         {"label": "Email provider key present", "ok": bool(config.RESEND_API_KEY), "detail": "Resend"},
         {"label": "Bounce and complaint webhook secured", "ok": bool(config.RESEND_WEBHOOK_SECRET), "detail": "signature verified"},
     ]
     launchpad = {"armed": all(c["ok"] for c in checks), "confirmed": is_confirmed, "checks": checks,
                  "headline": ("ARMED: sends Thursday 8:00 AM IST" if status == "approved" else "SENT" if status == "sent" else "SENDING" if status == "sending" else "ARMED") if all(c["ok"] for c in checks)
-                             else "SAFE: nothing can send until Shreya confirms"}
+                             else "SAFE: nothing can send until you confirm"}
     from app.ingest import similar as _sim
     past_pairs = [(m["title"], m["week"], fingerprint_of(m["title"])) for m in mem if m["week"] != week]
     dropped = {r["title"]: r["reason"] for r in extras.get("repeat_dropped", [])}
@@ -295,7 +304,7 @@ def state(fresh=False):
         elif a["title"] in runner:
             a["reason"] = f"Runner-up #{runner[a['title']]}: kept in reserve for the Swap carousel."
         elif a["source"] == "Added by Shreya":
-            a["reason"] = "Hand-picked by Shreya; in the pool for selection."
+            a["reason"] = "Hand-picked by you; in the pool for selection."
         elif sg_ is None:
             a["reason"] = "Not scored."
         elif fl == "NONE" and sg_ is not None and a.get("signal_filter") is None:
@@ -308,6 +317,9 @@ def state(fresh=False):
             a["reason"] = f"Strong signal ({sg_}/100) but outranked: the issue holds 8 to 10 stories across balanced sectors."
         a.pop("fingerprint", None)
     n_total = sum(counts.values())
+    for row in list(arts) + list(items):          # shown as "you" on screen; the stored value stays "Added by Shreya" because the selector keys on it
+        if row.get("source") == "Added by Shreya":
+            row["source"] = "Added by you"
     funnel = [{"label": "Ingested", "n": n_total, "note": "RSS feeds, Google News and 3 news APIs"},
               {"label": "After de-duplication", "n": n_total - counts.get("dup", 0), "note": f"{counts.get('dup', 0)} dropped as duplicates ({dup_in_week} in-week, {dup_past} already in the last four issues)"},
               {"label": "Pre-screened by Gemini", "n": n_scored, "note": "every candidate headline gets a 0 to 100 editorial signal"},
@@ -344,7 +356,7 @@ def state(fresh=False):
         "style": {"version": sg["version"], "banned": len(sg["banned"]), "examples": len(sg["examples"]),
                   "edits_total": edits["n"] or 0, "edits_pending": edits["pending"] or 0},
         "keys": {k: bool(config.env(k)) for k in ["GEMINI_API_KEY", "DATABASE_URL", "TELEGRAM_BOT_TOKEN", "RESEND_API_KEY", "RESEND_WEBHOOK_SECRET", "NEWSAPI_KEY", "GNEWS_API_KEY", "NEWSDATA_API_KEY"]},
-        "model": config.GEMINI_MODEL, "sender": config.RESEND_FROM,
+        "model": config.GEMINI_MODEL, "sender": config.RESEND_FROM, "viewing_past": viewing_past, "confirm_mode": "instant" if "resend.dev" in config.RESEND_FROM else "confirm",
         "memory": memory, "balance": balance, "approval": approval, "launchpad": launchpad, "growth": growth, "engagement": engagement, "benchmark_open_rate": 38,
         "deliverability": deliv, "funnel": funnel, "graph": graph, "trends": trends, "linkcheck": linkcheck, "tuner": extras["tuner"], "reminder": reminder_info(week, issue, extras["snooze"]),
         "buzz": BUZZ_SWAPS, "unsub_reasons": series.get("reasons", []),
@@ -413,7 +425,7 @@ async def add_subscribers(request: Request):
     emails = [e for e in re.split(r"[\s,;]+", (await request.json()).get("emails", "")) if e][:10]
     res = [mailer.subscribe(e) for e in emails]
     _cache["data"] = None
-    return {"ok": True, "added": sum(1 for r in res if r["ok"]), "invalid": sum(1 for r in res if not r["ok"])}
+    return {"ok": True, "added": sum(1 for r in res if r["ok"]), "invalid": sum(1 for r in res if not r["ok"]), "mode": next((r.get("mode") for r in res if r.get("mode")), "instant")}
 
 
 @router.post("/api/admin/voice-check")
@@ -439,22 +451,22 @@ async def preview_commentary(request: Request):
     from app import styleguide, select_stories
     item_id = int((await request.json()).get("item_id", 0))
     with db.conn() as c:
-        it = db.one(c, """SELECT i.selection_filter, a.title, a.source, a.snippet FROM issue_items i JOIN articles a ON a.id=i.article_id
+        it = db.one(c, """SELECT i.selection_filter, i.source_text, a.title, a.source, a.snippet FROM issue_items i JOIN articles a ON a.id=i.article_id
                           WHERE i.id=? AND i.kind='backup'""", (item_id,))
         sg = styleguide.active(c)
     if not it:
         raise HTTPException(404)
     text, errs = select_stories.draft_one(sg, it, fast=True)
-    return {"ok": True, "commentary": text, "checks": select_stories.voice_checks(text, it["title"], it["snippet"] or "", sg["banned"])}
+    return {"ok": True, "commentary": text, "checks": select_stories.voice_checks(text, it["title"], (it["snippet"] or "") + " " + (it.get("source_text") or ""), sg["banned"])}
 
 @router.get("/api/admin/email-preview", response_class=HTMLResponse)
 def email_preview():
     """The exact HTML that subscribers would receive, rendered from the current draft."""
     from app import mailer
-    week = config.week_start()
+    week, _ = _view_week(config.week_start())
     with db.conn() as c:
         issue = db.one(c, "SELECT * FROM issues WHERE week=?", (week,))
-        items = db.all(c, """SELECT i.position, i.topic, i.commentary, a.title, a.url, a.source FROM issue_items i JOIN articles a ON a.id=i.article_id
+        items = db.all(c, """SELECT i.position, i.topic, i.commentary, i.access, i.alt_url, i.alt_source, a.title, a.url, a.source FROM issue_items i JOIN articles a ON a.id=i.article_id
                              WHERE i.issue_id=? AND i.kind='selected' ORDER BY i.position""", (issue["id"],)) if issue else []
     if not items:
         return HTMLResponse("<body style='font:16px sans-serif;padding:40px'>No draft yet this week.</body>")
@@ -487,13 +499,13 @@ async def revoice(request: Request):
     b = await request.json()
     instruction = str(b.get("instruction", ""))[:200]
     with db.conn() as c:
-        it = db.one(c, """SELECT i.selection_filter, a.title, a.source, a.snippet FROM issue_items i JOIN articles a ON a.id=i.article_id
+        it = db.one(c, """SELECT i.selection_filter, i.source_text, a.title, a.source, a.snippet FROM issue_items i JOIN articles a ON a.id=i.article_id
                           WHERE i.id=? AND i.kind='selected'""", (int(b.get("item_id", 0)),))
         sg = styleguide.active(c)
     if not it:
         raise HTTPException(404)
     text, errs = select_stories.draft_one(sg, it, instruction=instruction, fast=True)
-    return {"ok": True, "commentary": text, "checks": select_stories.voice_checks(text, it["title"], it["snippet"] or "", sg["banned"])}
+    return {"ok": True, "commentary": text, "checks": select_stories.voice_checks(text, it["title"], (it["snippet"] or "") + " " + (it.get("source_text") or ""), sg["banned"])}
 
 @router.post("/api/admin/snooze")
 async def snooze(request: Request):

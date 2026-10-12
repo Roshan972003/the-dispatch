@@ -477,7 +477,7 @@ def do_reopen(issue_id):
         db.run(c, "UPDATE issues SET status='drafted', approved_at=NULL WHERE id=?", (issue_id,))
     _edit_here("↩️ Draft reopened. Nothing will be sent until you confirm again.", confirm_buttons(issue_id))
     try:
-        say_group("↩️ <b>Reopened for changes.</b> The confirmed draft above is withdrawn until Shreya confirms again.", disable_notification=True)
+        say_group("↩️ <b>Reopened for changes.</b> The confirmed draft above is withdrawn until it is confirmed again.", disable_notification=True)
     except Exception:
         pass
     return "Reopened."
@@ -507,7 +507,7 @@ def post_group_confirmed(issue_id):
     when = send_date(iss["week"])
     appr = datetime.fromisoformat(iss["approved_at"])
     head = (f"📰 <b>The Dispatch · Edition of {when.strftime('%A %-d %B %Y')}</b>\n"
-            f"✅ Confirmed by Shreya · {appr.strftime('%a %-d %b, %-I:%M %p')} IST\n"
+            f"✅ Confirmed · {appr.strftime('%a %-d %b, %-I:%M %p')} IST\n"
             f"📨 Subject: <b>{h(iss.get('subject') or 'The Dispatch')}</b>\n"
             f"🗓 Goes out {when.strftime('%a %-d %b, %-I:%M %p')} IST · {len(items)} stories · {subs} subscribers")
     m = say_group(head, disable_notification=False)
@@ -652,7 +652,7 @@ def _handle(u):
                 db.kv_set(c, "archive_chat_id", str(chat["id"]))
                 db.log(c, "group_registered", str(chat.get("title", ""))[:80])
             api("sendMessage", chat_id=chat["id"], parse_mode="HTML",
-                text="✅ <b>This group is now The Dispatch's archive.</b>\nEvery time Shreya confirms a final draft, the whole edition is posted here with its date, then a note when it goes out.")
+                text="✅ <b>This group is now The Dispatch's archive.</b>\nEvery time you confirm a final draft, the whole edition is posted here with its date, then a note when it goes out.")
             with db.conn() as c:       # if a draft was already confirmed this week, post it now
                 issue = db.one(c, "SELECT id, status FROM issues WHERE week=?", (config.week_start(),))
             if issue and issue["status"] in ("approved", "sending", "sent"):

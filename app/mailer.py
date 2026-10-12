@@ -45,7 +45,7 @@ def send_issue(issue_id, budget_s=50):
                              WHERE i.issue_id=? AND i.kind='selected' ORDER BY i.position""", (issue_id,))
         ok_ids = _eligible(c)
         todo = [r for r in db.all(c, """SELECT s.id, s.email, s.token FROM subscribers s LEFT JOIN sends x ON x.subscriber_id=s.id AND x.issue_id=?
-                            WHERE s.status='active' AND (x.id IS NULL OR x.status='failed')""", (issue_id,)) if r["id"] in ok_ids]
+                            WHERE s.status='active' AND (x.id IS NULL OR x.status='retry')""", (issue_id,)) if r["id"] in ok_ids]
     sent = failed = 0
     for i in range(0, len(todo), 50):
         if time.time() - t0 > budget_s:
@@ -59,13 +59,13 @@ def send_issue(issue_id, budget_s=50):
         with db.conn() as c:
             for s, (pid, err) in zip(chunk, results):
                 db.run(c, "UPDATE sends SET status=?, provider_id=?, error=? WHERE issue_id=? AND subscriber_id=?",
-                       ("sent" if pid else "failed", pid, err, issue_id, s["id"]))
+                       ("sent" if pid else ("retry" if _transient(err) else "failed"), pid, err, issue_id, s["id"]))
                 if err and re.search(r"invalid|not valid|does not exist", err, re.I):
                     db.run(c, "UPDATE subscribers SET status='bounced', status_changed_at=?, note=? WHERE id=?", (config.now_ist().isoformat(timespec="seconds"), err[:200], s["id"]))
                 sent += 1 if pid else 0; failed += 0 if pid else 1
     with db.conn() as c:
         left = len([r for r in db.all(c, """SELECT s.id FROM subscribers s LEFT JOIN sends x ON x.subscriber_id=s.id AND x.issue_id=?
-                            WHERE s.status='active' AND (x.id IS NULL OR x.status!='sent')""", (issue_id,)) if r["id"] in _eligible(c)])
+                            WHERE s.status='active' AND (x.id IS NULL OR x.status='retry')""", (issue_id,)) if r["id"] in _eligible(c)])      # permanent failures are final: they must not keep the issue open forever
         if left == 0:
             db.run(c, "UPDATE issues SET status='sent', sent_at=? WHERE id=?", (config.now_ist().isoformat(timespec="seconds"), issue_id))
         db.log(c, "send", f"issue {issue_id}: sent={sent} failed={failed} remaining={left}")
@@ -76,6 +76,10 @@ def send_issue(issue_id, budget_s=50):
         except Exception:
             pass
     return {"sent": sent, "failed": failed, "remaining": left}
+
+def _transient(err):
+    """Rate limits, provider outages and network errors are worth another try; a rejected address or a sender restriction is not."""
+    return bool(err) and (err.startswith(("429", "net:")) or err[:1] == "5")
 
 def _send_chunk(issue, items, chunk):
     """Returns [(provider_id|None, error|None)] aligned with chunk. Batch API first, per-email fallback."""
@@ -90,9 +94,9 @@ def _send_chunk(issue, items, chunk):
         time.sleep(0.55)                 # Resend default rate limit is 2 requests/second
         try:
             r = _client.post(RESEND + "/emails", headers=_auth(), json=_payload(issue, items, s))
-            out.append((r.json().get("id"), None) if r.status_code == 200 else (None, r.json().get("message", r.text)[:200]))
+            out.append((r.json().get("id"), None) if r.status_code == 200 else (None, f"{r.status_code}: " + str(r.json().get("message", r.text))[:190]))
         except httpx.HTTPError as e:
-            out.append((None, str(e)[:200]))
+            out.append((None, "net: " + str(e)[:190]))
     return out
 
 def send_plain(to, subject, html, text=""):
@@ -105,6 +109,7 @@ def now():
 
 def subscribe(email, confirmed=False):
     """Double opt-in: new sign-ups are 'pending' until they click the link. Bulk imports pass confirmed=True."""
+    test_sender = "resend.dev" in config.RESEND_FROM       # Resend's shared test sender can only deliver to the account owner, so a confirmation email would never arrive
     email = (email or "").strip().lower()
     if not EMAIL_RE.match(email) or len(email) > 254:
         return {"ok": False, "error": "Please enter a valid email address."}
@@ -114,13 +119,13 @@ def subscribe(email, confirmed=False):
             return {"ok": True, "message": "You are already subscribed."}
         if s and s["status"] in ("bounced", "complained"):
             return {"ok": True, "message": "Check your inbox to confirm."}      # same answer: do not reveal state
-        status = "active" if confirmed else "pending"
+        status = "active" if (confirmed or test_sender) else "pending"
         if s:
             db.run(c, "UPDATE subscribers SET status=?, status_changed_at=? WHERE id=?", (status, now(), s["id"])); token = s["token"]
         else:
             token = secrets.token_urlsafe(24)
             db.run(c, "INSERT INTO subscribers (email, status, token, created_at, status_changed_at) VALUES (?,?,?,?,?)", (email, status, token, now(), now()))
-    if not confirmed and config.RESEND_API_KEY:
+    if not confirmed and not test_sender and config.RESEND_API_KEY:
         link = f"{config.PUBLIC_URL}/confirm?t={token}"
         S = "-apple-system,'Segoe UI',Helvetica,Arial,sans-serif"
         send_plain(email, "Confirm your subscription to The Dispatch",
@@ -130,7 +135,11 @@ def subscribe(email, confirmed=False):
                    f'<p style="text-align:center;margin:26px 0"><a href="{h(link)}" style="background:#1c1917;color:#fff;text-decoration:none;font-weight:600;padding:14px 26px;border-radius:12px;display:inline-block">Confirm my subscription</a></p>'
                    f'<p style="color:#78716c;font-size:13px;margin:0">If you didn’t ask for this, ignore this email and nothing happens.</p></div></div>',
                    f"Confirm your subscription to The Dispatch: {link}")
-    return {"ok": True, "message": "Check your inbox to confirm." if not confirmed else "Added."}
+    if confirmed:
+        return {"ok": True, "message": "Added.", "mode": "instant"}
+    if test_sender:
+        return {"ok": True, "message": "You're subscribed. Welcome to The Dispatch!", "mode": "instant"}
+    return {"ok": True, "message": "Check your inbox to confirm.", "mode": "confirm"}
 
 def set_status_by_token(token, status, reason=None):
     with db.conn() as c:

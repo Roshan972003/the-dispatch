@@ -132,6 +132,21 @@ DRAFT_SCHEMA = {"type": "OBJECT", "properties": {"commentary": {"type": "STRING"
 EMOJI = re.compile("[\U0001F000-\U0001FAFF☀-➿⬀-⯿]")
 NUM = re.compile(r"\d[\d,]*\.?\d*")
 
+KNOWN = set("""India Indian Indians Indias Rs Cr FY RBI SEBI NPCI UPI IPO EV AI GST FDI NBFC NBFCs ED CEO CFO UK US USA UAE EU IIT IIM Q1 Q2 Q3 Q4 ESOP OFS DRHP RHP
+              Diwali Monday Tuesday Wednesday Thursday Friday Saturday Sunday January February March April May June July August September October November December
+              Google Meta Amazon Microsoft Apple Reliance Tata Paytm Flipkart Swiggy Zomato
+              SaaS NPA NPAs CAC LTV GMV AUM ARR MRR KYC PPI QR SME MSME VC VCs PE B2B B2C D2C Series Combinator YC Nasdaq NSE BSE SEZ MDR AA OTT GPU GPUs LLM LLMs API APIs OEM OEMs""".split())
+
+def ungrounded_names(text, source):
+    """Capitalised names in the commentary that appear nowhere in the story's own text: a sign Gemini embellished. Sentence-initial words are ignored."""
+    src = source.lower()
+    out = []
+    for sent in re.split(r"(?<=[.?])\s+", text):
+        for w in re.findall(r"\b[A-Z][A-Za-z&]{2,}\b", sent)[1:] if sent[:1].isupper() else re.findall(r"\b[A-Z][A-Za-z&]{2,}\b", sent):
+            if w not in KNOWN and w.lower() not in src and w not in out:
+                out.append(w)
+    return out
+
 def validate_commentary(text, title, snippet, banned):
     errs = []
     words = text.split()
@@ -150,6 +165,9 @@ def validate_commentary(text, title, snippet, banned):
     bad = [n for n in NUM.findall(text) if n.strip(",.") not in src.replace(",", "") and n.strip(",.") not in src]
     if bad:
         errs.append(f"numbers not in the snippet or headline: {', '.join(bad)}")
+    ug = ungrounded_names(text, src)
+    if ug:
+        errs.append(f"names not in the source: {', '.join(ug[:3])}")
     return errs
 
 def voice_checks(text, title, snippet, banned):
@@ -168,6 +186,7 @@ def voice_checks(text, title, snippet, banned):
         {"rule": "No '!' or emoji", "ok": "!" not in text and not EMOJI.search(text), "detail": "clean" if "!" not in text and not EMOJI.search(text) else "found"},
         {"rule": "Does not restate headline", "ok": overlap < 0.6, "detail": f"{int(overlap * 100)}% word overlap"},
         {"rule": "Numbers come from the source", "ok": not bad, "detail": ", ".join(bad) or "all grounded"},
+        {"rule": "Names come from the source", "ok": not ungrounded_names(text, src), "detail": ", ".join(ungrounded_names(text, src)[:3]) or "all grounded"},
     ]
 
 SCORE_SCHEMA = {"type": "OBJECT", "properties": {"scores": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
@@ -211,7 +230,7 @@ def tuner_text(t):
            else "Length: exactly 3 sentences, using the full claim, mechanism and closer structure.")
     return f"\n\nSHREYA'S TUNING FOR THIS RUN (stay inside the hard rules above):\n- {cyn}\n- {foc}\n- {den}"
 
-def draft_one(sg, story, tuner=None, instruction="", fast=False):
+def draft_one(sg, story, tuner=None, instruction="", fast=False, temperature=0.7):
     system = _system(sg) + tuner_text(tuner or get_tuner())
     body = (story.get("body") or "")[:1800]
     prompt = (f"Story:\n  Title: {story['title']}\n  Source: {story['source']}\n  Snippet: {story['snippet'] or '(none; reason from structure only)'}\n"
@@ -221,11 +240,44 @@ def draft_one(sg, story, tuner=None, instruction="", fast=False):
     text, errs = "", []
     for attempt in range(2):
         extra = "" if not errs else "\n\nFailed: " + "; ".join(errs) + ". Rewrite."
-        text = gemini.generate(system, prompt + extra, DRAFT_SCHEMA, 0.7, fast)["commentary"].strip()
+        text = gemini.generate(system, prompt + extra, DRAFT_SCHEMA, temperature, fast)["commentary"].strip()
         errs = validate_commentary(text, story["title"], (story["snippet"] or "") + " " + body, sg["banned"])
         if not errs:
             break
     return text, errs
+
+JUDGE_SCHEMA = {"type": "OBJECT", "properties": {"best": {"type": "INTEGER"}, "why": {"type": "STRING"}}, "required": ["best", "why"]}
+
+def judge(sg, story, cands):
+    """An editor's pass: which of several valid drafts would Shreya be proudest to publish? Returns the index."""
+    block = "\n".join(f"[{i}] {c}" for i, c in enumerate(cands))
+    res = gemini.generate("You are the editor-in-chief of the sharpest newsletter on the Indian startup ecosystem. You pick the best commentary, not the safest.",
+        f"Story: {story['title']}\nSnippet: {story['snippet'] or '(none)'}\nArticle text: {(story.get('body') or '')[:900]}\n\nCandidate commentaries:\n{block}\n\n"
+        "Pick the one a founder or investor would learn the most from. Prefer: a claim that stands without the headline; a concrete mechanism or number taken from the text; "
+        "the incentive behind the move; a closer that is testable (what to watch) rather than a moral; a dry, sceptical, never-hyped voice; varied rhythm. "
+        "Reject anything that could sit under any other story, restates the headline, hedges, or asserts a fact the text does not give. Return the index in 'best'.",
+        JUDGE_SCHEMA, 0.1)
+    b = res.get("best", 0)
+    return b if isinstance(b, int) and 0 <= b < len(cands) else 0
+
+def draft_best(sg, story, tuner=None, n=3):
+    """Several drafts, validated against every hard rule, then the editor's pick. Used for the Wednesday pass; taps stay single and fast."""
+    pool = []
+    for _ in range(n):
+        try:
+            text, errs = draft_one(sg, story, tuner, fast=True, temperature=0.95)
+        except Exception:
+            continue
+        if not errs and text and text not in [t for t, _ in pool]:
+            pool.append((text, errs))
+    if not pool:                                    # nothing passed the rules: fall back to the careful single draft
+        return draft_one(sg, story, tuner)
+    if len(pool) == 1:
+        return pool[0]
+    try:
+        return pool[judge(sg, story, [t for t, _ in pool])]
+    except Exception:
+        return pool[0]
 
 # ---------------- entity memory + trend clusters ----------------
 ENT_TYPES = ["STARTUP", "FOUNDER", "INVESTOR", "REGULATOR", "COMPANY", "OTHER"]
@@ -324,7 +376,7 @@ ANGLE_SCHEMA = {"type": "OBJECT", "properties": {
     "fusions": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {"a": {"type": "INTEGER"}, "b": {"type": "INTEGER"}, "angle": {"type": "STRING"}}, "required": ["a", "b", "angle"]}}},
     "required": ["stories", "fusions"]}
 
-def angles(stories):
+def _angles_once(stories):
     """Per story: three counter-thesis prompts (what the press may be missing). Across stories: up to three trend fusions. Framed as things to check, never as facts."""
     block = "\n".join(json.dumps({"id": s["id"], "pos": s["pos"], "title": s["title"], "snippet": (s.get("snippet") or "")[:240], "article_text": (s.get("body") or "")[:1500]}) for s in stories)
     res = gemini.generate("You are a sceptical editor's research assistant for The Dispatch, a newsletter on Indian startups.",
@@ -336,6 +388,19 @@ def angles(stories):
     quotes = {x["id"]: [q.strip() for q in x.get("quotes", []) if q.strip() and q.strip() in body.get(x["id"], "")][:2] for x in res.get("stories", []) if x["id"] in by_id}   # verbatim only
     return {"quotes": quotes, "counter": {x["id"]: x["counter"][:3] for x in res.get("stories", []) if x["id"] in by_id},
             "fusions": [f for f in res.get("fusions", []) if f["a"] != f["b"]][:3]}
+
+def angles(stories):
+    """Counter-thesis prompts for every story. If Gemini skips a story, ask again for just those, so no card is left without them."""
+    out = _angles_once(stories)
+    missing = [x for x in stories if not out["counter"].get(x["id"])]
+    if missing:
+        try:
+            more = _angles_once(missing)
+            out["counter"].update({k: v for k, v in more["counter"].items() if v})
+            out["quotes"].update({k: v for k, v in more.get("quotes", {}).items() if v})
+        except Exception:
+            pass
+    return out
 
 SUBJ_SCHEMA = {"type": "OBJECT", "properties": {"options": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
     "style": {"type": "STRING", "enum": ["CURIOSITY", "DATA", "PUNCHY"]}, "subject": {"type": "STRING"}, "preheader": {"type": "STRING"}}, "required": ["style", "subject", "preheader"]}}}, "required": ["options"]}
@@ -402,8 +467,8 @@ def run_selection(force=False):
             st["body"] = (got or {}).get("text") or ""
     lap('article_text')
     with ThreadPoolExecutor(12) as ex:   # independent Gemini jobs and link checks run together
-        fd = [ex.submit(draft_one, sg, s, tuner) for s in stories]
-        fb = [ex.submit(draft_one, sg, s, tuner) for s in top3]
+        fd = [ex.submit(draft_best, sg, s, tuner, 3) for s in stories]      # best of three, picked by an editor's judge
+        fb = [ex.submit(draft_best, sg, s, tuner, 2) for s in top3]
         fs, ft = ex.submit(_safe, score_pool, sg, cands), ex.submit(_safe, cluster_trends, cands)
         fa, fj = ex.submit(_safe, angles, stories), ex.submit(_safe, subject_lines, stories, sg["banned"])
         fx = ex.submit(_safe, access.diagnose_all, stories + backs[:6], pool_all)

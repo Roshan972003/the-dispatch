@@ -48,16 +48,18 @@ def confirmed():
                 f'<p><a class="btn ghost" href="/sample">See what a Thursday issue looks like →</a></p>{share_row("Bring a friend")}')
 
 def bad_link():
-    return page("Link not recognised", '<h1>That link didn’t work.</h1><p>It may have expired or been copied incorrectly. You can always <a href="/" style="color:var(--acc)">subscribe again</a>.</p>')
+    return page("The Dispatch", '<h1>This link is no longer active.</h1><p class="lead">It may already have been used, or it came from a preview. Nothing is wrong, and you can always join (or rejoin) in one step.</p><p><a class="btn" href="/">Go to The Dispatch</a></p>')
 
 def unsub_form(token):
     opts = "".join(f'<label class="r"><input type="radio" name="reason" value="{h(v)}"> {h(v)}</label>' for v in ["Too many emails", "Not relevant to me", "I never signed up", "Other"])
     return page("Unsubscribe · The Dispatch", f'<h1>Sorry to see you go.</h1><p>One click and you’re off the list. If you have a second, tell us why (optional).</p>'
                 f'<form method="post" action="/unsubscribe?t={h(token)}">{opts}<p style="margin-top:20px"><button class="btn">Unsubscribe me</button> &nbsp; <a class="btn ghost" href="/">Keep me subscribed</a></p></form>')
 
-def unsubscribed(token):
-    return page("Unsubscribed · The Dispatch", f'<h1>You’re unsubscribed.</h1><p class="lead">You won’t get another email from The Dispatch. Thanks for reading.</p>'
-                f'<div class="note">Clicked by mistake? You can rejoin in one click.</div><p><a class="btn" href="/resubscribe?t={h(token)}">Resubscribe</a></p>')
+def unsubscribed(token=None):
+    """Shown after any unsubscribe click. A real token also gets a one-click Resubscribe; a preview or unknown link simply confirms, with no error."""
+    again = (f'<div class="note">Clicked by mistake? You can rejoin in one click.</div><p><a class="btn" href="/resubscribe?t={h(token)}">Resubscribe</a></p>' if token
+             else '<div class="note">Changed your mind? You can rejoin any time.</div><p><a class="btn" href="/">Subscribe again</a></p>')
+    return page("Unsubscribed · The Dispatch", '<h1>You’re unsubscribed.</h1><p class="lead">You won’t get another email from The Dispatch. Thanks for reading.</p>' + again)
 
 def resubscribed():
     return page("Welcome back · The Dispatch", '<h1>Welcome back.</h1><p class="lead">You’re on the list again. See you Thursday.</p>')

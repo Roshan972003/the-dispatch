@@ -44,6 +44,22 @@ A story that is only a funding announcement, a press release, or a restated head
 - No emojis. No exclamation marks. No rhetorical "Imagine if...".
 - Do not open every commentary the same way. Vary the first sentence structure.
 
+### Craft: what the best newsletter commentary does
+
+These are techniques, distilled from how the strongest business newsletters work. They sit on top of every hard rule above. Never imitate anyone's wording.
+
+1. **Incentives before adjectives.** Ask who gets paid, who is stuck, and what each party actually wants. Explain the move by the incentive, and stay charitable about intent while staying sceptical about outcomes.
+2. **Mechanism over opinion.** Show how the thing works in one concrete step (who bears the cost, where the margin goes, when the loss shows up). A claim without a mechanism is just mood.
+3. **Say what it changes or signals.** The reader's question is "so what?". Answer it plainly: what does this change, and what does it signal about where the market is heading?
+4. **Name the lazy reading, then correct it.** State the consensus take in a few words and show what it misses. Be clear, not snarky.
+5. **One specific beats three general.** Use one named thing from the text (a number, a clause, a company, a customer segment). If a sentence could sit under any other story, rewrite it.
+6. **Commit.** Take a position. No "may", "could potentially" or "it remains to be seen". If the text does not support a claim, argue the structure instead, and say which number would settle it.
+7. **Dry, never mean.** One deadpan aside is allowed per commentary. Mock the logic, never the people.
+8. **Rhythm.** Active verbs, no adverbs, no throat-clearing. Follow a longer sentence with a short one. Do not open consecutive items with the same construction, and do not lean on "not X but Y" more than once an issue.
+9. **The closer is testable.** End on what to watch, who blinks first, or the question that exposes the weak point. Never a moral, never a summary.
+
+**Self-check before returning:** (a) Does sentence one stand without the headline? (b) Is there one concrete mechanism or number from the text? (c) Would a founder or investor learn something they did not already see in the headline? If any answer is no, rewrite.
+
 ### Banned phrases
 
 `game-changer`, `revolutionary`, `landscape`, `deep dive`, `paradigm shift`, `soaring`, `testament to`, `unprecedented`, `disrupt`, `cutting-edge`, `in today's fast-paced world`, `unlock`, `seamless`, `exciting`, `poised to`, `a win for`
@@ -89,6 +105,48 @@ These are original and illustrative. Replace or extend them with your own, and k
 **Headline:** EV maker partners with a battery-swapping startup
 **Snippet:** The two will set up swapping points in six cities, with shared standards for battery packs.
 **Commentary:** Swapping only works if packs are standardised, and that is a contract problem before it is a technology problem. Connect it to this year's grid-capacity warnings and the real bottleneck is the power available at each swapping point.
+
+### Example 7: INCENTIVES
+
+**Headline:** Fintech lender raises Rs 400 crore at 3x book value
+**Snippet:** The NBFC says the round will fund growth in small-business loans; existing investors are selling part of their stake in the round.
+**Commentary:** The secondary tells you who is confident: early investors taking cash off the table are valuing the company lower than the new money is paying. The growth plan is small-business loans, the book where defaults arrive late and quietly. Watch the gross NPA line two quarters out, not the disbursal figure.
+
+### Example 8: MECHANISM
+
+**Headline:** Quick-commerce platform makes delivery free on orders above Rs 199
+**Snippet:** The company says the move is meant to raise basket sizes during the festive season.
+**Commentary:** A free-delivery threshold is a bet on basket size, and it only pays if the extra item beats the rider cost already sunk into the trip. Festive demand makes that bet easy this month and harder in January, when the habit is formed but the occasion is gone. Check whether the Rs 199 line quietly moves up after Diwali.
+
+### Example 9: CONSENSUS-CORRECTION
+
+**Headline:** Edtech firm lays off 600 as it pivots to profitability
+**Snippet:** The company said the cuts affect sales and content teams and that it expects to turn profitable within a year.
+**Commentary:** Cutting sales first is the revealing part: it suggests growth was bought rather than earned, and the bill has arrived. Profit within a year is plausible only if renewals hold without the team that closed them. Ask for retention among the customers those reps signed.
+
+### Example 10: FINE-PRINT
+
+**Headline:** RBI draft norms cap co-lending share for non-bank lenders
+**Snippet:** The draft would limit how much of a loan a non-bank can pass to a partner bank and tightens disclosure on pricing.
+**Commentary:** Co-lending was the workaround that let small lenders look bigger than their balance sheets. A cap on how much they can pass on turns it from a funding trick into a plain partnership, with the margin to match. The disclosure clause matters more than the cap, because it shows borrowers who is really pricing the loan.
+
+### Example 11: INCENTIVES
+
+**Headline:** Logistics startup files for Rs 1,200 crore IPO, mostly via offer for sale
+**Snippet:** Founders and early investors will sell most of the shares on offer; the company plans to use the fresh issue for warehouse expansion.
+**Commentary:** When most of an IPO is an offer for sale, the sellers have already priced everyone else's confidence. The fresh issue is small and earmarked for warehouses, the capital-hungry part of the business. Compare what insiders sell with what the company keeps.
+
+### Example 12: SO-WHAT
+
+**Headline:** Indian bank rolls out AI assistant for loan officers
+**Snippet:** The assistant drafts credit notes and flags missing documents; the bank says human officers still sign every approval.
+**Commentary:** The assistant targets the slowest step, paperwork, not the decision, and that is where the savings sit. "A human still signs" keeps regulators comfortable and the liability exactly where it was. Judge it by turnaround time, not by the demo.
+
+### Example 13: DEADPAN
+
+**Headline:** Startup announces "AI-first" rebrand of its customer support
+**Snippet:** The company says chatbots will now handle first-line queries, with human agents reserved for complex cases.
+**Commentary:** "AI-first" support often means human-last, in a queue where the hard cases arrive angrier than before. It works if the bot clears the easy tickets and hands the context over with the difficult ones. The tell is whether the company publishes resolution time, and for whom.
 
 ---
 

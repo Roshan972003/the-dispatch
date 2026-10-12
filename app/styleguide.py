@@ -11,7 +11,30 @@ def _parse(md):
     filters = md[md.index("### The three selection filters"):md.index("## 2. Voice rules")].strip()
     return rules, banned, examples, filters
 
+_SYNCED = False
+
+def _sync_md(c):
+    """When style_guide.md changes (new rules or examples), create a NEW active version from it. Older versions are kept, and
+    the examples learned from Shreya's own edits are carried forward."""
+    global _SYNCED
+    if _SYNCED:
+        return
+    import hashlib
+    md = (config.ROOT / "style_guide.md").read_text()
+    digest = hashlib.sha1(md.encode()).hexdigest()
+    if db.kv_get(c, "style_md_hash") != digest:
+        row = db.one(c, "SELECT * FROM style_guide WHERE is_active=1 ORDER BY version DESC LIMIT 1")
+        rules, banned, examples, _ = _parse(md)
+        keep = [e for e in json.loads(row["examples"]) if e.get("filter") == "SHREYA-EDIT"] if row else []
+        if row:
+            db.run(c, "UPDATE style_guide SET is_active=0")
+        db.run(c, "INSERT INTO style_guide (version, rules, banned, examples, is_active, created_at) VALUES (?,?,?,?,1,?)",
+               ((row["version"] + 1) if row else 1, rules, json.dumps(banned), json.dumps(examples + keep), config.now_ist().isoformat(timespec="seconds")))
+        db.kv_set(c, "style_md_hash", digest)
+    _SYNCED = True
+
 def active(c):
+    _sync_md(c)
     row = db.one(c, "SELECT * FROM style_guide WHERE is_active=1 ORDER BY version DESC LIMIT 1")
     if not row:
         rules, banned, examples, _ = _parse((config.ROOT / "style_guide.md").read_text())

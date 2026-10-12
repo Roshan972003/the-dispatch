@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, HTTPException, Depends, Form
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from app import config, db
 
 app = FastAPI(title="The Dispatch: Newsletter Intelligence Engine")
@@ -81,7 +81,7 @@ async def api_subscribe(request: Request):
 @app.get("/confirm", response_class=HTMLResponse)
 def confirm(t: str):
     from app import mailer
-    return pages.confirmed() if mailer.set_status_by_token(t, "active") else HTMLResponse(pages.bad_link(), status_code=404)
+    return pages.confirmed() if mailer.set_status_by_token(t, "active") else HTMLResponse(pages.bad_link())
 
 @app.get("/unsubscribe", response_class=HTMLResponse)
 def unsubscribe_page(t: str):
@@ -92,7 +92,7 @@ def unsubscribe(t: str, reason: str = Form(None)):
     """Handles both the confirm button and the mail client's one-click List-Unsubscribe POST."""
     from app import mailer
     s = mailer.set_status_by_token(t, "unsubscribed", (reason or None) and reason[:60])
-    return pages.unsubscribed(t) if s else HTMLResponse(pages.bad_link(), status_code=404)
+    return pages.unsubscribed(t if s else None)        # an unknown or preview token still ends on a friendly confirmation, never an error
 
 @app.get("/resubscribe", response_class=HTMLResponse)
 def resubscribe(t: str):
@@ -100,7 +100,7 @@ def resubscribe(t: str):
     with db.conn() as c:
         s = db.one(c, "SELECT status FROM subscribers WHERE token=?", (t,))
     if not s:
-        return HTMLResponse(pages.bad_link(), status_code=404)
+        return RedirectResponse("/", status_code=302)
     if s["status"] == "unsubscribed":
         mailer.set_status_by_token(t, "active")
     return pages.resubscribed()
@@ -137,5 +137,5 @@ def archive(week: str):
         items = db.all(c, """SELECT i.position, i.topic, i.commentary, i.access, i.alt_url, i.alt_source, a.title, a.url, a.source FROM issue_items i JOIN articles a ON a.id=i.article_id
                              WHERE i.issue_id=? AND i.kind='selected' ORDER BY i.position""", (issue["id"],)) if issue else []
     if not issue:
-        raise HTTPException(404)
+        return RedirectResponse("/sample", status_code=302)      # not sent yet (or unknown week): show the sample issue, not an error
     return HTMLResponse(mailer.render(issue, items)[1])
