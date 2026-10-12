@@ -1,6 +1,7 @@
 """Telegram review loop. Shreya reviews the draft story by story (Keep / Swap / Edit), then confirms.
 Only TELEGRAM_CHAT_ID is obeyed. Nothing is ever emailed from here without an explicit two-step confirmation."""
-import json
+import json, re
+from datetime import datetime, timedelta
 from html import escape as h
 import httpx
 from app import config, db, select_stories, styleguide
@@ -41,7 +42,11 @@ def item_buttons(it):
                                  {"text": "🔄 Swap", "callback_data": f"swap:{it['id']}"},
                                  {"text": "✏️ Edit", "callback_data": f"edit:{it['id']}"}],
                                 [{"text": "🎙 Voice", "callback_data": f"voice:{it['id']}"},
-                                 {"text": "🧠 Angles", "callback_data": f"ang:{it['id']}"}]]}
+                                 {"text": "🧠 Angles", "callback_data": f"ang:{it['id']}"}],
+                                [{"text": "🔥 Spicier", "callback_data": f"tune:{it['id']}:0"},
+                                 {"text": "📊 Unit economics", "callback_data": f"tune:{it['id']}:1"},
+                                 {"text": "✂️ Trim to 2 lines", "callback_data": f"tune:{it['id']}:2"}]]
+            + ([[{"text": "↩️ Back to Gemini's original", "callback_data": f"reset:{it['id']}"}]] if it.get("draft_original") and it.get("commentary") != it.get("draft_original") else [])}
 
 def confirm_buttons(issue_id):
     return {"inline_keyboard": [[{"text": "📬 Confirm final draft", "callback_data": f"confirm:{issue_id}"}]]}
@@ -64,12 +69,41 @@ def send_draft(issue_id=None):
     send_subject_options(issue)
     with db.conn() as c:
         for it in items:
-            m = say(item_text(it, len(items)), reply_markup=item_buttons(it))
+            m = say(item_text(it, len(items)), reply_markup=item_buttons(it), disable_notification=True)
             db.run(c, "UPDATE issue_items SET tg_message_id=? WHERE id=?", (m["message_id"], it["id"]))
         db.run(c, "UPDATE issues SET status=CASE WHEN status='collecting' THEN 'drafted' ELSE status END WHERE id=?", (issue["id"],))
         db.log(c, "telegram_draft", f"issue {issue['id']} sent for review")
-    say("When you are happy with the draft:", reply_markup=confirm_buttons(issue["id"]))
+    say("When you are happy with the draft:", reply_markup=confirm_buttons(issue["id"]), disable_notification=True)
     return {"issue_id": issue["id"], "stories": len(items)}
+
+def reminder_buttons(issue_id):
+    return {"inline_keyboard": [[{"text": "✅ Confirm current draft & schedule 8 AM send", "callback_data": f"confirm:{issue_id}"}],
+                                [{"text": "⏭ Push deadline to Thursday 7 AM", "callback_data": f"push:{issue_id}"}]]}
+
+def _unpin():
+    with db.conn() as c:
+        mid = db.kv_get(c, "pinned_reminder")
+        if mid:
+            db.run(c, "DELETE FROM kv WHERE k='pinned_reminder'")
+    if mid:
+        try:
+            api("unpinChatMessage", chat_id=config.TELEGRAM_CHAT_ID, message_id=int(mid))
+        except Exception:
+            pass
+
+def do_push(issue_id):
+    """Quick action on the reminder: move the deadline to Thursday 7:00 AM IST. Nothing is sent in the meantime."""
+    with db.conn() as c:
+        iss = db.one(c, "SELECT * FROM issues WHERE id=?", (issue_id,))
+        if iss["status"] != "drafted":
+            return f"Issue is {iss['status']}."
+        until = (datetime.strptime(iss["week"], "%Y-%m-%d") + timedelta(days=3, hours=7)).isoformat(timespec="minutes")
+        db.kv_set(c, "snooze_until", until)
+        db.run(c, "UPDATE issues SET reminder_sent=0 WHERE id=?", (issue_id,))
+        db.log(c, "push", f"deadline pushed to {until}")
+    _unpin()
+    say("⏭ Deadline pushed to <b>Thursday 7:00 AM</b>. I'll nudge you again then. Nothing is sent until you confirm.")
+    return "Deadline pushed to Thursday 7 AM."
 
 def send_reminder(force=False):
     """Wed 10 PM IST: nudge if the draft is still unconfirmed. Honours a dashboard snooze; force=True is the manual ping."""
@@ -87,8 +121,14 @@ def send_reminder(force=False):
         db.run(c, "UPDATE issues SET reminder_sent=1 WHERE id=?", (issue["id"],))
         db.run(c, "DELETE FROM kv WHERE k='snooze_until'")
         db.log(c, "reminder", f"issue {issue['id']}" + (" (manual ping)" if force else ""))
-    say("⏰ <b>Reminder:</b> this week's Dispatch draft is still waiting for your confirmation. "
-        "Nothing will be sent until you confirm.", reply_markup=confirm_buttons(issue["id"]))
+    m = say("🚨 <b>The Dispatch is waiting on you.</b>\nThis week's draft is still unconfirmed. Nothing is emailed until you confirm.\n\n"
+            "Tap <b>Confirm</b> to go to the final step, or push the deadline.", reply_markup=reminder_buttons(issue["id"]))
+    try:        # escalation: the first message was silent; this one notifies and stays pinned until she acts
+        api("pinChatMessage", chat_id=config.TELEGRAM_CHAT_ID, message_id=m["message_id"], disable_notification=False)
+        with db.conn() as c:
+            db.kv_set(c, "pinned_reminder", str(m["message_id"]))
+    except Exception:
+        pass
     return {"reminded": issue["id"]}
 
 # ---------------- actions ----------------
@@ -177,7 +217,7 @@ def send_subject_options(issue):
     L = "ABC"
     say("📨 <b>Subject line</b> (A is used unless you pick another)\n\n" + "\n\n".join(
         f"<b>{L[i]})</b> {h(o['subject'])}\n<i>{h(o['preheader'])}</i> · {o['style'].lower()}" for i, o in enumerate(opts)),
-        reply_markup={"inline_keyboard": [[{"text": f"Use {L[i]}", "callback_data": f"subj:{issue['id']}:{i}"} for i in range(len(opts))]]})
+        reply_markup={"inline_keyboard": [[{"text": f"Use {L[i]}", "callback_data": f"subj:{issue['id']}:{i}"} for i in range(len(opts))]]}, disable_notification=True)
 
 def do_subject(issue_id, idx):
     with db.conn() as c:
@@ -190,6 +230,36 @@ def do_subject(issue_id, idx):
         db.run(c, "UPDATE issues SET subject=?, preheader=? WHERE id=?", (opts[idx]["subject"], opts[idx]["preheader"], issue_id))
         db.log(c, "subject", opts[idx]["subject"])
     return f"Subject set: {opts[idx]['subject'][:60]}"
+
+TUNES = {0: "Make it a notch spicier and more opinionated: a sharper claim and a dry edge. Stay inside the hard voice rules.",
+         1: "Bring in the unit-economics angle (margins, cost to serve, working capital, CAC). Use only numbers and facts present in the article text; if there are none, reason from structure and do not invent any.",
+         2: "Rewrite in exactly 2 sentences, keeping the sharpest claim and the closer."}
+
+def do_tune(item_id, kind):
+    """One-tap micro-tuning of the current commentary. Gemini rewrites it; 'Back to Gemini's original' restores the first draft."""
+    with db.conn() as c:
+        it = db.one(c, "SELECT i.*, a.title, a.source, a.snippet FROM issue_items i JOIN articles a ON a.id=i.article_id WHERE i.id=?", (item_id,))
+        if not it or it["kind"] != "selected":
+            return "That story is no longer in the draft."
+        if _locked(c, it["issue_id"]):
+            return "Draft is already confirmed. Reopen it first."
+        sg = styleguide.active(c)
+    story = {"title": it["title"], "source": it["source"], "snippet": it["snippet"], "selection_filter": it["selection_filter"], "body": it.get("source_text") or ""}
+    text, errs = select_stories.draft_one(sg, story, instruction=f"Current version: \"{it['commentary']}\". {TUNES[kind]}")
+    with db.conn() as c:
+        db.run(c, "UPDATE issue_items SET commentary=?, flags=? WHERE id=?", (text, "; ".join(errs), item_id))
+        db.log(c, "tune", f"item {item_id} kind {kind}")
+    _refresh(item_id)
+    return "Rewritten."
+
+def do_reset(item_id):
+    with db.conn() as c:
+        it = db.one(c, "SELECT * FROM issue_items WHERE id=?", (item_id,))
+        if _locked(c, it["issue_id"]):
+            return "Draft is already confirmed. Reopen it first."
+        db.run(c, "UPDATE issue_items SET commentary=draft_original, flags=NULL WHERE id=?", (item_id,))
+    _refresh(item_id)
+    return "Restored original."
 
 def do_keep(item_id):
     with db.conn() as c:
@@ -291,6 +361,7 @@ def do_confirm(issue_id):
             return f"Issue is {iss['status']}."
         db.run(c, "UPDATE issues SET status='approved', approved_at=? WHERE id=?", (config.now_ist().isoformat(timespec="seconds"), issue_id))
         db.log(c, "approved", f"issue {issue_id}")
+    _unpin()
     from app import pipeline
     msg = pipeline.on_approved(issue_id)
     say("✅ <b>Confirmed.</b> " + msg, reply_markup={"inline_keyboard": [[{"text": "↩️ Reopen draft", "callback_data": f"reopen:{issue_id}"}]]})
@@ -305,6 +376,56 @@ def do_reopen(issue_id):
     say("Draft reopened. Nothing will be sent until you confirm again.", reply_markup=confirm_buttons(issue_id))
     return "Reopened."
 
+# ---------------- Ask Gemini: questions about a story, answered from her own archive ----------------
+def ask_about_story(item_id, question, reply_to):
+    from app import gemini
+    with db.conn() as c:
+        it = db.one(c, """SELECT i.*, a.title, a.source, a.snippet, a.url FROM issue_items i JOIN articles a ON a.id=i.article_id WHERE i.id=?""", (item_id,))
+        past = db.all(c, """SELECT s.week, a.title, i.entities FROM issue_items i JOIN issues s ON s.id=i.issue_id JOIN articles a ON a.id=i.article_id
+                            WHERE i.kind='selected' AND s.week IN (SELECT week FROM issues ORDER BY week DESC LIMIT 6) ORDER BY s.week DESC""")
+        pool = db.all(c, "SELECT title, source FROM articles WHERE week=? ORDER BY published_at DESC LIMIT 600", (config.week_start(),))
+    names = {e["name"] for e in json.loads(it["entities"] or "[]")} | set(re.findall(r"\b[A-Z][A-Za-z0-9&]{2,}\b", question))
+    low = [n.lower() for n in names if len(n) > 2]
+    hit = lambda t: any(n in t.lower() for n in low)
+    arch = [f"- {p['week']}: {p['title']}" for p in past if hit(p["title"] + " " + (p["entities"] or ""))][:8]
+    inpool = [f"- {p['title']} ({p['source']})" for p in pool if hit(p["title"])][:8]
+    ctx = (f"THIS STORY: {it['title']} ({it['source']})\nSnippet: {it['snippet'] or '(none)'}\nArticle text: {(it['source_text'] or '')[:1500] or '(not extracted)'}\nHer commentary draft: {it['commentary']}\n\n"
+           f"EARLIER ISSUES that mention these names or topics:\n" + ("\n".join(arch) or "(none found)") + "\n\nTHIS WEEK'S ARTICLE POOL mentioning them:\n" + ("\n".join(inpool) or "(none found)"))
+    ans = gemini.generate("You are Shreya's research assistant for The Dispatch. Answer ONLY from the context given. Two sentences at most. "
+                          "If the context does not contain the answer, say exactly what is missing instead of guessing; never invent figures, valuations or dates.",
+                          f"{ctx}\n\nQUESTION: {question}", None, 0.2)
+    say("🧠 " + h(ans.strip()), reply_to_message_id=reply_to)
+
+# ---------------- /add: a story she found, straight into this week's pool ----------------
+URL_RE = re.compile(r"https?://[^\s<>]+")
+ADD_SCHEMA = {"type": "OBJECT", "properties": {"signal": {"type": "INTEGER"}, "filter": {"type": "STRING", "enum": select_stories.FILTERS + ["NONE"]},
+              "topic": {"type": "STRING", "enum": select_stories.TOPICS}, "in_scope": {"type": "BOOLEAN"}, "reason": {"type": "STRING"}}, "required": ["signal", "filter", "topic", "in_scope", "reason"]}
+
+def add_url(url):
+    from app import readable, ingest, gemini
+    got = readable.extract(url)
+    if not got or not (got["title"] or got["description"]):
+        say(f"I couldn't read that page ({h(url[:60])}). It may be behind a login or paywall. Paste the headline and a line of context and I'll add it by hand."); return
+    final = got["final_url"]
+    title = (got["title"] or final)[:300]
+    snippet = (got["description"] or got["text"])[:500]
+    with db.conn() as c:
+        if db.one(c, "SELECT id FROM articles WHERE url_hash=?", (ingest.url_hash(final),)):
+            say("That story is already in the pool."); return
+        sg = styleguide.active(c)
+        issue = db.one(c, "SELECT status FROM issues WHERE week=?", (config.week_start(),))
+    ev = gemini.generate("You are the editorial selector for The Dispatch.",
+        f"FILTERS:\n{sg['filters']}\n\nRate this story that Shreya found herself. signal 0-100 (how strongly it passes at least one filter), the best filter or NONE, topic sector, "
+        f"in_scope (is it about India's startup / tech / business ecosystem), and a one-sentence reason.\nTitle: {title}\nText: {got['text'][:1200] or snippet}", ADD_SCHEMA, 0.2)
+    with db.conn() as c:
+        db.insert(c, """INSERT INTO articles (url_hash, url, title, source, snippet, published_at, fetched_at, week, fingerprint, topic, status, signal, signal_filter)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""", (ingest.url_hash(final), ingest.canon(final), title, "Added by Shreya", snippet, config.now_ist().isoformat(timespec="seconds"),
+                        config.now_ist().isoformat(timespec="seconds"), config.week_start(), ingest.fingerprint(title), ev["topic"], "new", max(0, min(100, int(ev["signal"]))), ev["filter"]))
+        db.log(c, "quick_add", title[:120])
+    warn = "" if ev["in_scope"] and ev["signal"] >= 50 else "\n⚠️ Gemini rates this lower than usual, but it is in the pool because you chose it."
+    when = ("The draft already exists, so it will be considered if the editorial pass is re-run." if issue else "It is in Wednesday's candidate pool and will be preferred as a hand-picked story.")
+    say(f"✅ <b>Added:</b> {h(title[:120])}\nSignal {ev['signal']}/100 · {h(ev['topic'])} · {h(ev['filter'].lower())}\n<i>{h(ev['reason'])}</i>{warn}\n\n{when}")
+
 # ---------------- update router ----------------
 def handle_update(u):
     if "callback_query" in u:
@@ -313,9 +434,9 @@ def handle_update(u):
             return
         parts = q["data"].split(":")
         act, args = parts[0], [int(x) for x in parts[1:] if x.lstrip("-").isdigit()]
-        fn = {"keep": do_keep, "swap": do_swap_menu, "pick": do_swap_pick, "back": do_back, "edit": ask_edit, "voice": ask_voice, "ang": show_angles, "subj": do_subject,
-              "confirm": ask_confirm, "yes": do_confirm, "reopen": do_reopen, "no": lambda a: "Cancelled. Nothing will be sent."}.get(act)
-        slow = act in ("swap", "voice")     # may call Gemini or Telegram files: acknowledge the tap first so the button stops spinning
+        fn = {"keep": do_keep, "tune": do_tune, "reset": do_reset, "swap": do_swap_menu, "pick": do_swap_pick, "back": do_back, "edit": ask_edit, "voice": ask_voice, "ang": show_angles, "subj": do_subject,
+              "confirm": ask_confirm, "push": do_push, "yes": do_confirm, "reopen": do_reopen, "no": lambda a: "Cancelled. Nothing will be sent."}.get(act)
+        slow = act in ("swap", "voice", "tune")     # may call Gemini or Telegram files: acknowledge the tap first so the button stops spinning
         if slow:
             api("answerCallbackQuery", callback_query_id=q["id"], text="One moment…")
         try:
@@ -324,7 +445,7 @@ def handle_update(u):
             note = f"Error: {str(e)[:150]}"
         if not slow:
             api("answerCallbackQuery", callback_query_id=q["id"], text=note)
-        elif note not in ("Pick a replacement.", "Reply with a voice note."):
+        elif note not in ("Pick a replacement.", "Reply with a voice note.", "Rewritten."):
             say(note)
         return
     m = u.get("message")
@@ -340,6 +461,24 @@ def handle_update(u):
     if m.get("reply_to_message") and text and not text.startswith("/"):
         if save_edit(m["reply_to_message"]["message_id"], text):
             return
+        with db.conn() as c:        # a reply to a story card that is not an edit prompt is a question for Gemini
+            card = db.one(c, "SELECT id FROM issue_items WHERE tg_message_id=? AND kind='selected'", (m["reply_to_message"]["message_id"],))
+        if card:
+            try:
+                ask_about_story(card["id"], text, m["message_id"])
+            except Exception as e:
+                say(f"Sorry, I couldn't answer that: {h(str(e)[:100])}")
+            return
+    if text.startswith("/add") or (URL_RE.fullmatch(text) if text else False):
+        urls = URL_RE.findall(text)
+        if not urls:
+            say("Send <code>/add https://link</code>, or just share a link with me."); return
+        for u in urls[:3]:
+            try:
+                add_url(u.rstrip(").,"))
+            except Exception as e:
+                say(f"Couldn't add that one: {h(str(e)[:100])}")
+        return
     if text.startswith("/draft"):
         send_draft()
     elif text.startswith("/status"):
@@ -348,4 +487,4 @@ def handle_update(u):
             n = db.one(c, "SELECT COUNT(*) AS n FROM articles WHERE week=?", (config.week_start(),))["n"]
         say(f"Week {config.week_start()}: {n} articles collected. Issue: <b>{i['status'] if i else 'not drafted yet'}</b>.")
     else:
-        say("I'm The Dispatch bot. I send you the weekly draft on Wednesday evening.\n/draft resend the current draft\n/status pipeline status")
+        say("I'm The Dispatch bot. I send you the weekly draft on Wednesday evening.\n/draft resend the current draft\n/status pipeline status\n/add &lt;link&gt; add a story you found to this week's pool (or just share a link)\nReply to any story card with a question and I'll answer from the archive.")

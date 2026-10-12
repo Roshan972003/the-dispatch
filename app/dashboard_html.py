@@ -98,15 +98,31 @@ textarea.ta{width:100%;min-height:90px;resize:vertical;font-family:var(--mono);f
 .pvf{display:block;border:0;margin:0 auto;background:#f5f5f4;height:640px;transition:width .25s}.dk .pvf{filter:invert(.92) hue-rotate(180deg)}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}.seg button{background:transparent;border:0;color:var(--mut);padding:6px 12px;font:500 12px var(--sans);cursor:pointer}.seg button.on{background:var(--acc-soft);color:var(--acc)}
 .soc{white-space:pre-wrap;font:13px/1.55 var(--sans);background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:12px}.tw1{margin-bottom:10px}
+.fun{display:grid;gap:10px}.fun .row{display:grid;grid-template-columns:170px 1fr;gap:14px;align-items:center}.fun .lab{font:600 13px var(--sans)}.fun .lab small{display:block;font:11px var(--mono);color:var(--mut);font-weight:400}
+.fun .bar{height:30px;border-radius:8px;background:linear-gradient(90deg,var(--acc),rgba(245,158,11,.45));display:flex;align-items:center;padding:0 12px;font:600 13px var(--mono);color:#1a1100;min-width:46px;position:relative}
+.fun .drop{font:11.5px var(--mono);color:var(--bad);margin:-4px 0 2px 184px}@media(max-width:700px){.fun .row{grid-template-columns:1fr}.fun .drop{margin-left:0}}
+.src{font:13.5px/1.6 var(--serif);color:var(--ink);max-height:150px;overflow:auto;padding-right:4px}.src mark{background:rgba(245,158,11,.3);color:inherit;border-radius:3px;padding:0 2px}
+.why-d{font:11.5px/1.45 var(--mono);color:var(--mut);margin-top:3px}
+.dv{margin-top:10px;font-size:13px}.dv summary{cursor:pointer;color:var(--ink);font-weight:500}.dv ul{margin:8px 0 4px;padding-left:18px;color:var(--ink)}.dv li{margin:4px 0}
+.pal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:60;display:none;align-items:flex-start;justify-content:center;padding-top:12vh}.pal.open{display:flex}
+.pbox{width:min(620px,94vw);background:var(--bg);border:1px solid var(--line);border-radius:16px;box-shadow:0 30px 80px rgba(0,0,0,.5);overflow:hidden}
+.pbox input{width:100%;padding:16px 18px;font:16px var(--sans);background:transparent;border:0;border-bottom:1px solid var(--line);color:var(--ink);outline:none}
+#pall{max-height:52vh;overflow:auto;padding:6px}.pg{font:500 10.5px var(--mono);text-transform:uppercase;letter-spacing:.09em;color:var(--mut);padding:10px 12px 4px}
+.pi{display:flex;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:9px;cursor:pointer;font-size:14px}.pi.on,.pi:hover{background:var(--acc-soft)}.pi small{color:var(--mut);font:11px var(--mono)}
+.pft{padding:8px 14px;border-top:1px solid var(--line);font:11px var(--mono);color:var(--mut)}
+.fz{position:relative;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:6px;touch-action:none}@media(max-width:700px){.fz{grid-template-columns:1fr 1fr}}
+.fnode{border:1px solid var(--line);background:var(--card2);border-radius:12px;padding:10px 12px;cursor:crosshair;user-select:none;font-size:12.5px;line-height:1.4;position:relative;z-index:2}.fnode b{font:600 11px var(--mono);color:var(--acc);display:block;margin-bottom:3px}
+.fnode:hover,.fnode.on{border-color:var(--acc);background:var(--acc-soft)}.fzsvg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}
 .flag{margin-top:8px;font:12px var(--mono);padding:7px 10px;border-radius:8px;background:var(--acc-soft);color:var(--acc)}
 </style></head><body>
-<header><div class="bar"><div class="brand">The Dispatch<small>command center</small></div><span class="sp"></span><span class="pill" id="wk"></span><span class="pill" id="st"></span><button class="ibtn" id="theme" title="Light / dark">◐</button></div>
+<header><div class="bar"><div class="brand">The Dispatch<small>command center</small></div><span class="sp"></span><span class="pill" id="wk"></span><span class="pill" id="st"></span><button class="act sm" id="kbtn" style="font-family:var(--mono)" title="Command palette">⌘K</button><button class="ibtn" id="theme" title="Light / dark">◐</button></div>
 <div class="banner" id="banner"></div><nav id="tabs"></nav></header>
 <main id="main"><div class="empty">Loading…</div></main>
 <div class="scrim" id="scrim"></div><aside class="dr" id="drawer"></aside>
+<div class="pal" id="pal"><div class="pbox"><input id="palq" placeholder="Search stories, jump to a view, run an action…  try  >  or  /" autocomplete="off"><div id="pall"></div><div class="pft">↑↓ move · ↵ run · esc close · &gt; actions · / filters</div></div></div>
 <script>
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let S=null,fetchedAt=Date.now(),tab=(location.hash||'#command').slice(1),F={q:'',status:'all',source:'all',limit:60,sort:'time'},ed={text:'',item:''},sim=null,gSel=null,pvDev='desktop',pvDark=false,socTab='x',rv={},ru={},openDrawer=false;
+let S=null,fetchedAt=Date.now(),tab=(location.hash||'#command').slice(1),F={q:'',status:'all',source:'all',limit:60,sort:'time',filter:'',topic:''},fz=null,fzDrag=null,pal={open:false,q:'',sel:0,items:[]},ed={text:'',item:''},sim=null,gSel=null,pvDev='desktop',pvDark=false,socTab='x',rv={},ru={},openDrawer=false;
 const TABS=[['command','Command'],['curation','Curation'],['intelligence','Intelligence'],['telegram','Telegram lab'],['delivery','Delivery'],['subscribers','Subscribers'],['articles','Articles'],['sources','Sources']];
 const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const when=iso=>{if(!iso)return '—';const d=new Date(iso.length<=16?iso+':00':iso);return isNaN(d)?iso:DAYS[d.getDay()]+' '+d.toLocaleTimeString('en-IN',{hour:'numeric',minute:'2-digit',hour12:true})+' · '+d.getDate()+' '+d.toLocaleString('en-IN',{month:'short'})};
@@ -158,6 +174,10 @@ function gauge(v,bench){
 function sigRing(v){const c=v==null?'var(--mut)':v>=70?'var(--acc)':'var(--mut)',p=v==null?0:v,r=30,L=2*Math.PI*r;
   return `<svg class="ring" viewBox="0 0 74 74"><circle cx="37" cy="37" r="${r}" fill="none" stroke="var(--soft)" stroke-width="7"/><circle cx="37" cy="37" r="${r}" fill="none" stroke="${c}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${L*p/100} ${L}" transform="rotate(-90 37 37)"/><text x="37" y="42" text-anchor="middle" font-size="17" font-family="var(--serif)" fill="var(--ink)">${v==null?'—':v}</text></svg>`}
 
+function funnel(){
+  const F=S.funnel,mx=Math.max(1,F[0].n);
+  return `<div class="fun">`+F.map((f,i)=>{const lost=i?F[i-1].n-f.n:0;return `<div class="row"><div class="lab">${esc(f.label)}<small>${esc(f.note)}</small></div><div class="bar" style="width:${Math.max(6,f.n/mx*100)}%">${f.n}</div></div>${lost>0&&i<F.length?`<div class="drop">−${lost} dropped</div>`:''}`}).join('')+`</div>`;
+}
 function command(){
   const k=S.kpis,B=S.balance,steps=S.stages.map((s,n)=>`<div class="step ${s.state}"><div class="c">${s.state==='done'?'✓':n+1}</div><div class="t">${esc(s.label)}</div><div class="d">${esc(s.detail)}</div></div>`).join('');
   const colors={draft:'amber',telegram:'blue',reminder:'red',confirmed:'green'},icon={draft:'🟡',telegram:'🔵',reminder:'🔴',confirmed:'🟢'};
@@ -165,6 +185,7 @@ function command(){
   const picked=sel().filter(i=>i.signal!=null),rest=S.articles.filter(a=>a.signal!=null&&a.status==='new');
   const avg=picked.length?Math.round(picked.reduce((a,b)=>a+b.signal,0)/picked.length):null,avr=rest.length?Math.round(rest.reduce((a,b)=>a+b.signal,0)/rest.length):'—';
   return `<div class="card"><h2>Approval status</h2><p class="sub">The Wednesday evening pipeline, live from the database.</p><div class="appr">${ap}</div></div>
+  <div class="card" style="margin-top:16px"><h2>The 60-to-10 signal funnel</h2><p class="sub">Every article the pipeline saw this week, and how it narrowed to the issue. The Articles tab shows the reason each one was dropped.</p>${funnel()}</div>
   <div class="card" style="margin-top:16px"><h2>This week’s pipeline</h2><p class="sub">Monday to Wednesday collection, Wednesday selection, Shreya’s confirmation, Thursday delivery.</p><div class="steps">${steps}</div></div>
   <div class="grid g6">${kpi(k.articles_week,'articles ingested','')}${kpi(k.duplicates,'duplicates caught',S.memory.dup_in_week+' in-week · '+S.memory.dup_past+' vs past issues')}${kpi(k.sources_ok+'/'+k.sources_total,'sources live','RSS · Google News · 3 APIs')}
    ${kpi(S.scored,'scored by Gemini','signal 0–100')}${kpi(avg==null?'—':avg,'avg signal of picks','vs '+avr+' for the rest')}${kpi(k.subscribers,'active subscribers','target 2,200')}</div>
@@ -178,13 +199,19 @@ function command(){
    <div class="card"><h3>Activity log</h3><div class="feed">${S.events.slice(0,9).map(e=>`<div class="r"><span class="mut">${esc(short(e.ts))}</span><span><span class="chip">${esc(e.kind)}</span></span><span class="mut">${esc((e.detail||'').slice(0,110))}</span></div>`).join('')}</div></div></div>`;
 }
 
+const ACC={free:['ok','🟢 free access'],soft:['warn','🟡 soft paywall'],hard:['bad','🔴 hard paywall'],dead:['bad','🔴 dead link'],unknown:['','⚪ unverified']};
+const accChip=i=>{const a=ACC[i.access];return a?`<span class="chip ${a[0]}">${a[1]}</span>`:''};
+const altLine=i=>i.alt_url&&['soft','hard','dead'].includes(i.access)?`<div class="mono" style="font-size:11.5px;margin-top:6px">Free coverage: <a href="${esc(i.alt_url)}" target="_blank" rel="noopener">${esc(i.alt_source)}</a> (added to the email)</div>`:(['soft','hard'].includes(i.access)?`<div class="mono mut" style="font-size:11.5px;margin-top:6px">No free coverage of this story found this week.</div>`:'');
+const srcPane=i=>{if(!i.source_text)return `<p>${esc(i.snippet||'(no text from the feed; Gemini reasons from the headline)')}</p>`;
+  let h=esc(i.source_text.slice(0,1400));(i.quotes||[]).forEach(q=>{const e=esc(q);if(h.includes(e))h=h.replace(e,'<mark>'+e+'</mark>')});
+  return `<div class="mono mut" style="font-size:10.5px;margin-bottom:4px">SOURCE TEXT · extracted · ${(i.quotes||[]).length?'key quotes highlighted by Gemini':'no quotes flagged'}</div><div class="src">${h}</div>`};
 const TAGS=['Make it more counterintuitive','Focus on regulatory friction','Sharper closer','Shorter','Focus on unit economics'];
 function curation(){
   const s=sel();if(!s.length)return `<div class="card"><div class="empty">No draft yet this week. Selection runs Wednesday 2:00 PM IST.</div></div>`;
   const T=S.tuner,notes=(S.issue&&S.issue.selection_notes||'').split('\nFLAG:');
   const sl=(k,l,a,b)=>`<div class="sl"><div class="lab"><span>${l}</span><b id="tv-${k}">${T[k]}</b></div><input type="range" min="0" max="100" value="${T[k]}" data-tune="${k}"><div class="lab"><span>${a}</span><span>${b}</span></div></div>`;
-  const cards=s.map(i=>`<div class="rc"><div class="raw"><h4>Raw article · ${esc(i.source)}</h4><a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.title)}</a><p>${esc(i.snippet||'(no snippet from the feed, Gemini reasons from the headline)')}</p><span class="chip t">${esc(i.topic)}</span></div>
-   <div><h4>Gemini Flash commentary ${i.edited?'· <span class="chip">edited by Shreya</span>':''}</h4><p class="cm">${esc(i.commentary)}</p>${checks(i.checks)}
+  const cards=s.map(i=>`<div class="rc"><div class="raw"><h4>Raw article · ${esc(i.source)}</h4><a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.title)}</a>${srcPane(i)}<span class="chip t">${esc(i.topic)}</span> ${accChip(i)}${altLine(i)}</div>
+   <div><h4>Gemini Flash commentary ${i.edited?'· <span class="chip">edited by Shreya</span>':''}</h4><p class="cm">${esc(i.commentary)}</p>${checks(i.checks)}${counterBox(i)}${backlink(i)}
     <div class="tags">${TAGS.map(t=>`<button class="act sm ghost" data-rv="${i.id}" data-ins="${esc(t)}">↻ ${esc(t)}</button>`).join('')}</div>
     ${rv[i.id]?`<div class="rv">${rv[i.id].loading?'Rewriting…':esc(rv[i.id].commentary)}${rv[i.id].checks?`<small>${rv[i.id].checks.every(c=>c.ok)?'✓ passes all voice checks':'⚠ '+rv[i.id].checks.filter(c=>!c.ok).map(c=>c.rule).join(', ')} · preview only: tap Edit in Telegram to use it ${copyBtn('rvt'+i.id,'Copy')}</small><span id="rvt${i.id}" style="display:none">${esc(rv[i.id].commentary)}</span>`:''}</div>`:''}</div>
    <div><h4>Why it was chosen</h4><div style="display:flex;gap:12px;align-items:center">${sigRing(i.signal)}<div><span class="chip t">${esc((i.selection_filter||'').toLowerCase())}</span><div class="mut mono" style="font-size:11px;margin-top:4px">signal ${i.signal==null?'n/a':i.signal+'/100'}</div></div></div>
@@ -196,13 +223,14 @@ function curation(){
    <div class="card"><h2>Voice guardrail editor</h2><p class="sub">Type or paste commentary. Banned words glow red; the rules re-check live.</p>
     <div class="tools" style="margin-bottom:10px"><select id="edsel"><option value="">Free text</option>${opts}</select></div>
     <div class="edw"><div class="hl" id="hl"></div><textarea id="edt" placeholder="Paste a commentary…" rows="4">${esc(ed.text)}</textarea></div><div id="edck" style="margin-top:8px"></div><div id="edsug" class="tags"></div></div></div>
+  ${subjectCard()}${fusionCard()}${voiceCard()}
   <div style="margin-top:20px"><h2>Reasoning cards</h2><p class="sub">${esc(notes[0]||'')} Raw article, Gemini’s draft and the editorial reasoning side by side. ${S.kpis.reviewed}/${s.length} ticked in Telegram.</p>${notes[1]?`<div class="flag">⚠ ${esc(notes[1])}</div>`:''}${cards}</div>`;
 }
 function drawer(){
   const b=bk().slice(0,5);
   $('#drawer').innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">Runner-ups</h2><button class="act sm" id="closedr">Close</button></div>
    <p class="sub" style="margin-top:6px">The next-best stories from this week’s batch. Preview the commentary Gemini would write; to actually swap, tap <b>Swap</b> on that story in Telegram.</p>
-   ${b.map(i=>`<div class="ru"><b>${esc(i.title)}</b><div class="mut mono" style="font-size:11px;margin:6px 0">${esc(i.source)} · ${esc(i.topic)} · signal ${i.signal==null?'n/a':i.signal}</div><div style="font-size:12.5px;color:var(--mut)">${esc(i.why)}</div>
+   ${b.map(i=>`<div class="ru"><b>${esc(i.title)}</b><div class="mut mono" style="font-size:11px;margin:6px 0">${esc(i.source)} · ${esc(i.topic)} · signal ${i.signal==null?'n/a':i.signal} ${new Set(sel().map(x=>x.topic)).has(i.topic)?'':'<span class="chip ok">adds a new sector</span>'} ${accChip(i)}</div><div style="font-size:12.5px;color:var(--mut)">${esc(i.why)}</div>
     <div class="acts" style="margin-top:10px"><button class="act sm" data-ru="${i.id}">Preview commentary</button></div>${ru[i.id]?`<div class="rv">${ru[i.id].loading?'Drafting…':esc(ru[i.id].commentary)}${ru[i.id].checks?`<small>${ru[i.id].checks.every(c=>c.ok)?'✓ passes all voice checks':'⚠ check the voice rules'}</small>`:''}</div>`:''}</div>`).join('')||'<div class="empty">No runner-ups.</div>'}`;
 }
 function editorUpdate(){
@@ -230,8 +258,8 @@ function graphSvg(){
 function intelligence(){
   const g=S.graph,M=S.memory,T=S.trends,node=g.nodes.find(n=>n.name===gSel);
   const legend=Object.entries(TCOL).map(([t,c])=>`<span class="chip" style="color:${c}"><i class="dot" style="background:${c};display:inline-block;margin-right:5px"></i>${t.toLowerCase()}</span>`).join('');
-  const panel=node?`<h3>${esc(node.name)} · ${node.type.toLowerCase()}</h3>${node.repeat?'<div class="flag" style="background:var(--bad-soft);color:var(--bad)">Covered in '+node.weeks.length+' different issues, avoid repeating the angle.</div>':'<span class="chip ok">first appearance in the 4-week window</span>'}
-    <div class="list" style="margin-top:10px">${[...node.stories].sort((a,b)=>b.week.localeCompare(a.week)).map(s=>`<div class="r"><span><a href="${esc(s.url)}" target="_blank" rel="noopener" style="text-decoration:none">${esc(s.title)}</a><br><span class="mut mono" style="font-size:11px">${esc(s.topic)}</span></span><span>wk ${esc(s.week.slice(5))}</span></div>`).join('')}</div>`:
+  const panel=node?`<h3>${esc(node.name)} · ${node.type.toLowerCase()}</h3>${node.repeat?collision(node):'<span class="chip ok">first appearance in the 4-week window</span>'}
+    <div class="list" style="margin-top:10px">${[...node.stories].sort((a,b)=>b.week.localeCompare(a.week)).map(s=>`<div class="r"><span><a href="${esc(s.url)}" target="_blank" rel="noopener" style="text-decoration:none">${esc(s.title)}</a><br><span class="mut mono" style="font-size:11px">${esc(s.topic)}</span></span><span style="text-align:right">${s.days_ago!=null?s.days_ago+' days ago':'wk '+esc(s.week.slice(5))}${s.edition?'<br>Edition #'+s.edition:''}</span></div>`).join('')}</div>`:
     `<h3>Click any node</h3><p class="mut" style="font-size:13px">See when and how that startup, founder, investor or regulator was covered in the last four issues.</p>${g.repeats.length?`<div class="flag">Repeat entities this window: ${g.repeats.map(esc).join(', ')}</div>`:'<span class="chip ok">no entity repeats detected</span>'}`;
   const secs=[...new Set((T?T.clusters:[]).flatMap(c=>c.sectors))].sort();
   const heat=T&&T.clusters.length?`<div class="cl" style="--n:${secs.length}"><span></span>${secs.map(s=>`<span class="mut mono" style="font-size:10px;text-align:center">${esc(s.split(' ')[0].replace('&',''))}</span>`).join('')}<span class="mut mono" style="font-size:10px;text-align:center">size</span></div>`+
@@ -246,12 +274,19 @@ function intelligence(){
     <div class="kv" style="margin-top:14px"><span class="pill info">${M.dup_in_week} duplicate headlines inside this week</span><span class="pill warn">${M.dup_past} matched stories from earlier issues</span></div></div></div>`;
 }
 
-function simInit(){sim={kept:{},swapped:{},next:0,editing:null,edits:{},conf:0,loading:{}}}
+function simInit(){sim={kept:{},swapped:{},used:{},menu:null,editing:null,edits:{},tuned:{},voice:null,angles:{},conf:0,loading:{}}}
+const TUNE_TXT=['Make it a notch spicier and more opinionated: a sharper claim and a dry edge.','Bring in the unit-economics angle. Use only numbers present in the article text.','Rewrite in exactly 2 sentences, keeping the sharpest claim and the closer.'];
 function phone(){
-  if(!sim)simInit();const s=sel();let h=`<div class="msg"><b>The Dispatch · draft for week of ${esc(S.week)}</b><br>${s.length} stories · ${S.kpis.subscribers} active subscribers<br><span style="color:#8fa3b8">Review each story: Keep, Swap, or Edit. Nothing is sent until you confirm.</span></div>`;
+  if(!sim)simInit();const s=sel();let h=`<div class="msg"><b>The Dispatch · draft for week of ${esc(S.week)}</b><br>${s.length} stories · ${S.kpis.subscribers} active subscribers<br><span style="color:#8fa3b8">Review each story: Keep, Swap (3 options), Edit, Voice or Angles. Nothing is sent until you confirm.</span></div>`;
   s.forEach(i=>{const sw=sim.swapped[i.id],title=sw?sw.title:i.title,cm=sim.edits[i.id]||(sw?sw.commentary:i.commentary),src=sw?sw.source:i.source,mark=sim.kept[i.id]?'✅ ':'';
-    h+=`<div class="msg"><b>${mark}${i.position}/${s.length} · ${esc(sw?sw.topic:i.topic)}</b>${sim.edits[i.id]?' · ✏️ edited':''}<br><a>${esc(title)}</a> (${esc(src)})<br><br>${sim.loading[i.id]?'<i>Gemini is drafting a replacement…</i>':esc(cm)}
-     <div class="kb"><button data-sim="keep:${i.id}">✅ Keep</button><button data-sim="swap:${i.id}">🔄 Swap</button><button data-sim="edit:${i.id}">✏️ Edit</button></div></div>`;
+    if(sim.menu===i.id){const opts=bk().filter(b=>!sim.used[b.id]).slice(0,3);
+      h+=`<div class="msg"><b>🔄 Swap story ${i.position}</b>: choose a replacement<br><br>${opts.map((b,n)=>`<b>${'ABC'[n]})</b> <a>${esc(b.title.slice(0,90))}</a> (${esc(b.source)}) · ${esc(b.topic)}<br>${esc(b.commentary||'(drafted on demand in the real bot)')}`).join('<br><br>')||'No runner-ups left.'}<div class="kb">${opts.map((b,n)=>`<button data-sim="pick:${i.id}:${b.id}">Select ${'ABC'[n]}</button>`).join('')}</div><div class="kb one"><button data-sim="back:${i.id}">↩️ Keep original</button></div></div>`;return}
+    h+=`<div class="msg"><b>${mark}${i.position}/${s.length} · ${esc(sw?sw.topic:i.topic)}</b>${sim.edits[i.id]?' · ✏️ edited':''}<br><a>${esc(title)}</a> (${esc(src)})${i.access==='hard'||i.access==='soft'?`<br>${i.access==='hard'?'🔴 hard paywall':'🟡 soft paywall'}`:''}<br><br>${sim.loading[i.id]?'<i>Gemini is working on it…</i>':esc(cm)}
+     <div class="kb"><button data-sim="keep:${i.id}">✅ Keep</button><button data-sim="swap:${i.id}">🔄 Swap</button><button data-sim="edit:${i.id}">✏️ Edit</button></div>
+     <div class="kb"><button data-sim="voice:${i.id}">🎙 Voice</button><button data-sim="ang:${i.id}">🧠 Angles</button></div>
+     <div class="kb"><button data-sim="tune:${i.id}:0">🔥 Spicier</button><button data-sim="tune:${i.id}:1">📊 Unit econ.</button><button data-sim="tune:${i.id}:2">✂️ Trim</button></div>${sim.tuned[i.id]?`<div class="kb one"><button data-sim="reset:${i.id}">↩️ Back to Gemini's original</button></div>`:''}</div>`;
+    if(sim.voice===i.id)h+=`<div class="msg">🎙 <b>Voice comment for story ${i.position}.</b> Reply to this message with a voice note: just say your raw take. I'll turn it into 2 to 3 sharp lines in your voice.<br><span style="color:#8fa3b8">(Works in the real bot: hold the mic and speak. Try it in Telegram.)</span></div>`;
+    if(sim.angles[i.id])h+=`<div class="msg">🧠 <b>Angles for story ${i.position}</b>: things to check, not facts<br>${(i.counter||[]).map(c=>'• '+esc(c)).join('<br>')||'No angles were generated for this story.'}</div>`;
     if(sim.editing===i.id)h+=`<div class="msg me"><div style="font-size:11px;color:#a9c4e0;margin-bottom:4px">Reply with your version of story ${i.position}</div><textarea id="simtxt">${esc(cm)}</textarea><div class="kb one"><button data-sim="save:${i.id}">Send</button></div></div>`});
   h+=`<div class="msg">When you are happy with the draft:<div class="kb one"><button data-sim="confirm:0">📬 Confirm final draft</button></div></div>`;
   if(sim.conf>=1)h+=`<div class="msg">Send this issue to <b>${S.kpis.subscribers}</b> subscribers on Thursday morning?<br>${s.filter(i=>!sim.kept[i.id]).length} stories not yet ticked with Keep. This is the final confirmation.<div class="kb"><button data-sim="yes:0">✅ Yes, send Thursday</button><button data-sim="no:0">Cancel</button></div></div>`;
@@ -283,6 +318,7 @@ function delivery(){
     <div class="card"><h2>Engagement</h2><p class="sub">Open and click events arrive through the Resend webhook once emails go out from a verified domain.</p><div class="grid g2" style="margin:0;align-items:center"><div>${gauge(E.open_rate,S.benchmark_open_rate)}</div><div>
      <div class="list"><div class="r"><span>Delivered</span><span>${E.delivered}</span></div><div class="r"><span>Opened</span><span>${E.opened}</span></div><div class="r"><span>Clicked</span><span>${E.clicked}</span></div></div></div></div>
      <h3 style="margin-top:16px">Clicks by story topic</h3>${E.clicks_by_topic.length?bars(E.clicks_by_topic):'<div class="mut" style="font-size:13px">No tracked clicks yet. Nothing here is estimated.</div>'}</div></div></div>
+  ${deliverCard()}${featuredCard()}
   <div class="card" style="margin-top:16px"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><h2>Social repurposing</h2><div class="seg"><button class="${socTab==='x'?'on':''}" data-soc="x">X thread</button><button class="${socTab==='li'?'on':''}" data-soc="li">LinkedIn post</button></div></div>
    <p class="sub">Built from the current draft’s commentary. Posts stay inside the platform limits.</p>
    ${!it.length?'<div class="empty">No draft yet.</div>':socTab==='x'?`<div class="acts" style="margin-bottom:10px">${copyBtn('xall','Copy whole thread')}<span class="mut mono" style="font-size:12px">${th.length} posts</span></div><span id="xall" style="display:none">${esc(th.join('\n\n'))}</span>${th.map(t=>`<div class="soc tw1"><span class="mono mut" style="font-size:11px">${t.length}/280</span><br>${esc(t)}</div>`).join('')}`:
@@ -305,14 +341,14 @@ function subscribers(){
 
 function articles(){
   const srcs=[...new Set(S.articles.map(a=>a.source))].sort();
-  let rows=S.articles.filter(a=>(F.status==='all'||a.status===F.status)&&(F.source==='all'||a.source===F.source)&&(!F.q||(a.title+a.source).toLowerCase().includes(F.q.toLowerCase())));
+  let rows=S.articles.filter(a=>(!F.filter||a.signal_filter===F.filter)&&(!F.topic||(a.topic||'').startsWith(F.topic))&&(F.status==='all'||a.status===F.status)&&(F.source==='all'||a.source===F.source)&&(!F.q||(a.title+a.source).toLowerCase().includes(F.q.toLowerCase())));
   if(F.sort==='signal')rows=[...rows].sort((a,b)=>(b.signal??-1)-(a.signal??-1));
   const tot=rows.length;rows=rows.slice(0,F.limit);const c={all:S.articles.length};S.articles.forEach(a=>c[a.status]=(c[a.status]||0)+1);
   return `<div class="card"><h2>Signal-to-noise live feed</h2><p class="sub">Every article stored this week, rated 0–100 by Gemini for editorial signal. ${S.scored} of ${S.articles.length} scored. Duplicates are kept for the audit trail.</p>
-  <div class="tools"><input id="q" placeholder="Search…" value="${esc(F.q)}"><select id="fs"><option value="all">All statuses (${c.all})</option>${['new','selected','dup'].map(s=>`<option value="${s}" ${F.status===s?'selected':''}>${badge(s)[1]} (${c[s]||0})</option>`).join('')}</select>
+  <div class="tools">${F.filter||F.topic?`<button class="act sm" id="clrf">Clear filter: ${esc(F.filter||F.topic)} ✕</button>`:''}<input id="q" placeholder="Search…" value="${esc(F.q)}"><select id="fs"><option value="all">All statuses (${c.all})</option>${['new','selected','dup'].map(s=>`<option value="${s}" ${F.status===s?'selected':''}>${badge(s)[1]} (${c[s]||0})</option>`).join('')}</select>
    <select id="fsrc"><option value="all">All sources</option>${srcs.map(s=>`<option ${F.source===s?'selected':''}>${esc(s)}</option>`).join('')}</select><select id="fsort"><option value="time" ${F.sort==='time'?'selected':''}>Newest first</option><option value="signal" ${F.sort==='signal'?'selected':''}>Highest signal first</option></select></div>
   <div class="tw"><table><thead><tr><th>Headline</th><th>Source</th><th>Signal</th><th>Status</th><th>Published</th></tr></thead><tbody>
-  ${rows.map(a=>`<tr><td class="ti"><a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title)}</a>${a.dup_title?`<div class="mut" style="font-size:11.5px">duplicate of: ${esc(a.dup_title)}</div>`:''}</td><td>${esc(a.source)}</td>
+  ${rows.map(a=>`<tr><td class="ti"><a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title)}</a><div class="why-d">${esc(a.reason||'')}</div></td><td>${esc(a.source)}</td>
    <td><div class="sig">${a.signal==null?'<span class="mut">—</span>':`<i class="${a.signal>=70?'hi':''}" style="width:${Math.max(4,a.signal*.55)}px"></i>${a.signal}`}</div>${a.signal_filter&&a.signal_filter!=='NONE'?`<span class="chip">${esc(a.signal_filter.toLowerCase())}</span>`:''}</td>
    <td>${pill(a.status)}${a.topic?` <span class="chip t">${esc(a.topic)}</span>`:''}</td><td class="mono mut">${esc(short(a.published_at))}</td></tr>`).join('')||'<tr><td colspan="5" class="empty">Nothing matches.</td></tr>'}</tbody></table></div>
   ${tot>F.limit?`<div class="more"><button class="act" id="more">Show more (${tot-F.limit} left)</button></div>`:''}</div>`;
@@ -330,8 +366,26 @@ function sources(){
   ${fail.length?`<div class="card" style="margin-top:16px"><h3>Failed on the last run</h3><div class="list">${fail.map(([n,e])=>`<div class="r"><span>${esc(n)}</span><span>${esc(e)}</span></div>`).join('')}</div></div>`:''}`;
 }
 
+const counterBox=i=>(i.counter&&i.counter.length)?`<details class="dv"><summary>🧠 Devil’s advocate: ${i.counter.length} things to check</summary><ul>${i.counter.map(c=>`<li>${esc(c)}</li>`).join('')}</ul><div class="mono mut" style="font-size:10.5px">Prompts to verify, not facts.</div></details>`:'';
+const backlink=i=>{const b=((S.memory||{}).backlinks||[]).find(x=>x.title===i.title);return b?`<div class="rv" style="font-size:14px;margin-top:10px">🔗 <b>Backlink idea:</b> ${esc(b.text)} <a href="${esc(b.url)}" target="_blank" rel="noopener">open</a></div>`:''};
+const collision=n=>{const st=[...n.stories].sort((a,b)=>b.week.localeCompare(a.week));const l=st.find(x=>x.days_ago!=null);return `<div class="flag" style="background:var(--bad-soft);color:var(--bad)">⚠ Collision: ${l?`covered ${l.days_ago} days ago in Edition #${l.edition}`:'covered in an earlier issue'}${n.weeks.length>1?` and in ${n.weeks.length} issues in total`:''}. Avoid repeating the angle.</div>`};
+function subjectCard(){const o=(S.issue&&S.issue.subject_options)||[];if(!o.length)return '';return `<div class="card" style="margin-top:16px"><h2>Subject line options</h2><p class="sub">Gemini’s three hooks for this issue. Shreya picks one in Telegram; A is used if she does not. No open-rate prediction is shown: that needs her past performance data.</p><div class="list">${o.map((x,n)=>`<div class="r"><span><b class="serif" style="font-size:17px">${'ABC'[n]}) ${esc(x.subject)}</b><br><span class="mut" style="font-size:12.5px">${esc(x.preheader)}</span></span><span><span class="chip t">${esc(x.style.toLowerCase())}</span>${S.issue.subject===x.subject?' <span class="chip ok">in use</span>':''}</span></div>`).join('')}</div></div>`}
+function voiceCard(){const st=S.style;return `<div class="card" style="margin-top:16px"><h2>Voice evolution</h2><p class="sub">Every edit Shreya makes (typed or spoken) is logged against Gemini’s draft. On the 1st of each month the best pairs become new few-shot examples in a new style-guide version; older versions are kept.</p>
+ <div class="kv"><span class="pill info">style guide v${st.version}</span><span class="pill">${st.examples} examples</span><span class="pill">${st.edits_total} edits captured</span><span class="pill ${st.edits_pending?'warn':''}">${st.edits_pending} waiting to be learned</span></div><div class="acts" style="margin-top:12px"><button class="act sm" data-run="promote">Learn from her edits now</button></div><div class="note" id="note"></div></div>`}
+function fusionCard(){const s=sel();if(s.length<2)return '';const fus=(S.issue&&S.issue.fusions)||[],byPos={};s.forEach(i=>byPos[i.position]=i);
+  const A=fz&&s.find(i=>i.id===fz.a),B=fz&&s.find(i=>i.id===fz.b);
+  return `<div class="card" style="margin-top:16px"><h2>Trend-fusion canvas</h2><p class="sub">Drag a line from one story to another. Gemini connects the two into one trend-connecting commentary block, in Shreya’s voice. Preview only.</p>
+  <div class="fz" id="fz"><svg class="fzsvg"><line id="fzl" stroke="var(--acc)" stroke-width="3" stroke-dasharray="6 5" style="display:none"/><line id="fzf" stroke="var(--acc)" stroke-width="3" style="display:none"/></svg>${s.map(i=>`<div class="fnode ${fz&&(fz.a===i.id||fz.b===i.id)?'on':''}" data-id="${i.id}"><b>${i.position} · ${esc(i.topic)}</b>${esc(i.title.length>78?i.title.slice(0,76)+'…':i.title)}</div>`).join('')}</div>
+  ${fus.length?`<div class="tags" style="margin-top:12px"><span class="mono mut" style="font-size:11px;align-self:center">Gemini suggests:</span>${fus.map(f=>byPos[f.a]&&byPos[f.b]?`<button class="act sm ghost" data-fz="${byPos[f.a].id},${byPos[f.b].id}" title="${esc(f.angle)}">${f.a} × ${f.b}</button>`:'').join('')}</div>`:''}
+  ${fz?`<div class="rv" style="margin-top:14px">${fz.loading?'Connecting the dots…':fz.res?`<b>${A?A.position:''} × ${B?B.position:''}</b><br>${esc(fz.res.commentary)}<small>${fz.res.checks.every(c=>c.ok)?'✓ passes all voice checks':'⚠ '+fz.res.checks.filter(c=>!c.ok).map(c=>c.rule).join(', ')} · preview only ${copyBtn('fzt','Copy')}</small><span id="fzt" style="display:none">${esc(fz.res.commentary)}</span>`:esc(fz.msg||'')}</div>`:''}</div>`}
+function fzDraw(){const f=$('#fzf'),box=$('#fz');if(!f||!box)return;if(!(fz&&fz.a&&fz.b)){f.style.display='none';return}const r=box.getBoundingClientRect(),a=box.querySelector(`.fnode[data-id="${fz.a}"]`),b=box.querySelector(`.fnode[data-id="${fz.b}"]`);if(!a||!b)return;
+  const A=a.getBoundingClientRect(),B=b.getBoundingClientRect();f.setAttribute('x1',A.left+A.width/2-r.left);f.setAttribute('y1',A.top+A.height/2-r.top);f.setAttribute('x2',B.left+B.width/2-r.left);f.setAttribute('y2',B.top+B.height/2-r.top);f.style.display='block'}
+async function fuseRun(a,b){fz={a,b,loading:true};render();const j=await post('/api/admin/fuse',{a,b});fz={a,b,res:j.ok?j:null,msg:j.ok?'':(j.message||'Try again shortly.')};render()}
+function deliverCard(){const d=S.deliverability||[];if(!d.length)return '';const bad=d.filter(x=>!x.ok).length;return `<div class="card" style="margin-top:16px"><div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px"><h2>Deliverability check</h2><span class="pill ${bad?'warn':'ok'}">${bad?bad+' to fix':'all clear'}</span></div><p class="sub">Heuristic checks on the assembled email for the current draft. They protect the open rate; this is not a full spam-filter simulation.</p><div class="list">${d.map(x=>`<div class="r"><span>${x.ok?'<span class="chip ok">✓</span>':'<span class="chip bad">✗</span>'} ${esc(x.rule)}</span><span>${esc(x.detail)}</span></div>`).join('')}</div></div>`}
+function featuredCard(){const seen={},rows=[];sel().forEach(i=>(i.entities||[]).forEach(e=>{if(['STARTUP','COMPANY','FOUNDER','INVESTOR'].includes(e.type)&&!seen[e.name]){seen[e.name]=1;rows.push({...e,story:i})}}));if(!rows.length)return '';
+  return `<div class="card" style="margin-top:16px"><h2>Featured this week: outreach list</h2><p class="sub">Startups, founders and investors covered in this edition. Handles are never guessed: each row opens a search for you, and the message is ready to copy. You send them yourself.</p><div class="tw"><table><thead><tr><th>Name</th><th>Type</th><th>Story</th><th></th></tr></thead><tbody>${rows.map((r,n)=>`<tr><td><b>${esc(r.name)}</b></td><td><span class="chip">${r.type.toLowerCase()}</span></td><td class="mut">#${r.story.position}</td><td><div class="acts"><a class="act sm" style="text-decoration:none" target="_blank" rel="noopener" href="https://x.com/search?q=${encodeURIComponent(r.name)}&f=user">Find on X</a><a class="act sm" style="text-decoration:none" target="_blank" rel="noopener" href="https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(r.name)}">LinkedIn</a>${copyBtn('dm'+n,'Copy message')}</div><span id="dm${n}" style="display:none">${esc(`Hi, ${r.name} came up in this week's The Dispatch (story ${r.story.position}: "${r.story.title.slice(0,90)}"). Thought you might want to see it: ${S.public_url}`)}</span></td></tr>`).join('')}</tbody></table></div></div>`}
 const V={command,curation,intelligence,telegram,delivery,subscribers,articles,sources};
-function render(){head();$('#main').innerHTML=(V[tab]||V.command)();if(tab==='curation')editorUpdate();drawer();$('#drawer').classList.toggle('open',openDrawer);$('#scrim').classList.toggle('open',openDrawer)}
+function render(){head();$('#main').innerHTML=(V[tab]||V.command)();if(tab==='curation')editorUpdate();drawer();$('#drawer').classList.toggle('open',openDrawer);$('#scrim').classList.toggle('open',openDrawer);fzDraw()}
 async function load(){const r=await fetch('/api/admin/state');S=await r.json();fetchedAt=Date.now();render()}
 async function silent(){const keepNote=$('#note')&&$('#note').textContent,cls=$('#note')&&$('#note').className;const r=await fetch('/api/admin/state?fresh=true');if(!r.ok)return;S=await r.json();fetchedAt=Date.now();
   const x=document.activeElement;if(x&&x.matches('input,textarea,select'))return head();render();const n=$('#note');if(n&&keepNote){n.className=cls;n.textContent=keepNote}}
@@ -351,15 +405,22 @@ document.addEventListener('click',async e=>{
   if(b=g('[data-node]')){gSel=gSel===b.dataset.node?null:b.dataset.node;render();return}
   if(b=g('[data-pv]')){pvDev=b.dataset.pv;render();return}if(b=g('[data-pvd]')){pvDark=b.dataset.pvd==='1';render();return}if(b=g('[data-soc]')){socTab=b.dataset.soc;render();return}
   if(b=g('[data-copy]')){const el=document.getElementById(b.dataset.copy);try{await navigator.clipboard.writeText(el.textContent);b.textContent='Copied ✓'}catch(x){b.textContent='Select + copy manually'}return}
+  if(b=g('[data-fz]')){const[x,y]=b.dataset.fz.split(',').map(Number);await fuseRun(x,y);return}
+  if(g('#clrf')){F.filter='';F.topic='';render();return}
+  if(g('#kbtn')){palOpen();return}
+  if(b=g('.pi')){palRun(+b.dataset.i);return}
+  if(e.target.id==='pal'){palClose();return}
   if(b=g('[data-sim]')){await simAct(b.dataset.sim);return}
   if(e.target.id==='addsub'){flash('Sending…');const j=await post('/api/admin/subscribers',{emails:$('#em').value});flash(j.ok?`✓ ${j.added} confirmation email(s) sent${j.invalid?`, ${j.invalid} invalid`:''}.`:'✗ '+j.message);await silent()}
 });
-async function simAct(a){const[k,idS]=a.split(':'),id=+idS;if(!sim)simInit();
-  if(k==='reset')simInit();else if(k==='keep')sim.kept[id]=!sim.kept[id];else if(k==='edit')sim.editing=id;
+async function simAct(a){const p=a.split(':'),k=p[0],id=+p[1],bid=+p[2];if(!sim)simInit();
+  if(k==='reset'&&p.length===2&&id===0)simInit();else if(k==='reset'){delete sim.edits[id];delete sim.tuned[id]}
+  else if(k==='keep')sim.kept[id]=!sim.kept[id];else if(k==='edit')sim.editing=id;else if(k==='voice')sim.voice=sim.voice===id?null:id;else if(k==='ang')sim.angles[id]=!sim.angles[id];
   else if(k==='save'){const v=$('#simtxt').value.trim();if(v){sim.edits[id]=v;sim.kept[id]=true}sim.editing=null}
   else if(k==='confirm')sim.conf=1;else if(k==='no')sim.conf=0;else if(k==='yes')sim.conf=2;
-  else if(k==='swap'){const b=bk()[sim.next];if(!b){return}sim.loading[id]=true;sim.next++;render();
-    const j=await post('/api/admin/preview-commentary',{item_id:b.id});sim.loading[id]=false;sim.swapped[id]={title:b.title,source:b.source,topic:b.topic,commentary:j.ok?j.commentary:(b.why||'')};delete sim.edits[id];sim.kept[id]=false}
+  else if(k==='swap')sim.menu=id;else if(k==='back')sim.menu=null;
+  else if(k==='pick'){const b=bk().find(x=>x.id===bid);if(b){sim.swapped[id]={title:b.title,source:b.source,topic:b.topic,commentary:b.commentary||b.why||''};sim.used[bid]=true;delete sim.edits[id];sim.kept[id]=false}sim.menu=null}
+  else if(k==='tune'){sim.loading[id]=true;render();const j=await post('/api/admin/revoice',{item_id:id,instruction:TUNE_TXT[bid]});sim.loading[id]=false;if(j.ok){sim.edits[id]=j.commentary;sim.tuned[id]=true}}
   render();const bd=$('#simbody');if(bd&&k!=='reset')bd.scrollTop=k==='confirm'||k==='yes'?bd.scrollHeight:bd.scrollTop}
 let tuneT;
 document.addEventListener('input',e=>{const t=e.target;
@@ -368,6 +429,28 @@ document.addEventListener('input',e=>{const t=e.target;
   if(t.dataset&&t.dataset.tune){$('#tv-'+t.dataset.tune).textContent=t.value;S.tuner[t.dataset.tune]=+t.value;clearTimeout(tuneT);tuneT=setTimeout(async()=>{const j=await post('/api/admin/tuner',S.tuner);flash(j.ok?'✓ '+j.message:'…')},600)}});
 document.addEventListener('change',e=>{const t=e.target;if(t.id==='fs'){F.status=t.value;F.limit=60;render()}if(t.id==='fsrc'){F.source=t.value;F.limit=60;render()}if(t.id==='fsort'){F.sort=t.value;render()}
   if(t.id==='edsel'){ed.item=t.value;const it=S.items.find(x=>x.id==t.value);ed.text=it?it.commentary:'';render()}});
+async function runStep(step){flash('Running…','#bnote');try{const j=await post('/api/admin/run/'+step);flash((j.ok?'✓ ':'✗ ')+(j.message||j.detail||'done'),'#bnote')}catch(x){flash('✗ '+x,'#bnote')}await silent()}
+const SLUG=t=>t.toLowerCase().replace(/&/g,'and').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+function palBuild(){const q=pal.q.trim().toLowerCase(),out=[];const add=(g,label,run,hint='')=>{if(!q||label.toLowerCase().includes(q.replace(/^[>\/]/,'').trim())||(q[0]!=='>'&&q[0]!=='/'&&label.toLowerCase().includes(q)))out.push({g,label,run,hint})};
+  const mode=q[0]==='>'?'a':q[0]==='/'?'f':'';
+  if(!mode||mode==='a'){[['> Re-run Editorial Pass',()=>runStep('select'),'Gemini'],['> Fetch articles now',()=>runStep('ingest'),'RSS + APIs'],['> Re-send draft to Telegram',()=>runStep('draft'),'Telegram'],['> Force Telegram Reminder',()=>runStep('ping'),'pinned alert'],['> Snooze reminder 1 hour',async()=>{const j=await post('/api/admin/snooze',{minutes:60});flash((j.ok?'✓ ':'✗ ')+j.message,'#bnote');await silent()},'10 PM'],['> Run link health check',()=>runStep('linkcheck'),'pre-flight'],['> Open runner-ups drawer',()=>{tab='curation';openDrawer=true;render()},'swap'],['> Toggle light / dark',()=>$('#theme').click(),'theme']].forEach(([l,r,h])=>add('Actions',l,r,h))}
+  if(!mode||mode==='f'){[['/counterintuitive','COUNTERINTUITIVE'],['/under-reported','UNDER-REPORTED'],['/trend-connecting','TREND-CONNECTING']].forEach(([l,f])=>add('Filters',l,()=>{F.filter=f;F.topic='';F.status='all';tab='articles';location.hash='articles';render()},'editorial filter'));
+    ((S.balance&&S.balance.axes)||[]).forEach(x=>add('Filters','/'+SLUG(x.topic).split('-')[0],()=>{F.topic=x.topic;F.filter='';F.status='all';tab='articles';location.hash='articles';render()},x.topic))}
+  if(!mode){TABS.forEach(([k,l])=>add('Go to',l,()=>{tab=k;location.hash=k;render()},'view'));
+    sel().forEach(i=>add('This week’s stories','#'+i.position+' '+i.title,()=>{tab='curation';location.hash='curation';render()},i.topic));
+    if(q.length>=3){S.articles.filter(a=>a.title.toLowerCase().includes(q)).slice(0,6).forEach(a=>out.push({g:'Candidate articles',label:a.title,hint:a.source,run:()=>{F.q=q;F.status='all';F.filter='';F.topic='';tab='articles';location.hash='articles';render()}}))}}
+  return out.slice(0,30)}
+function palRender(){pal.items=palBuild();let last='',h='';pal.items.forEach((it,n)=>{if(it.g!==last){h+=`<div class="pg">${esc(it.g)}</div>`;last=it.g}h+=`<div class="pi ${n===pal.sel?'on':''}" data-i="${n}"><span>${esc(it.label)}</span><small>${esc(it.hint||'')}</small></div>`});$('#pall').innerHTML=h||'<div class="pg">No matches</div>'}
+function palOpen(){pal.open=true;pal.q='';pal.sel=0;$('#pal').classList.add('open');$('#palq').value='';palRender();setTimeout(()=>$('#palq').focus(),20)}
+function palClose(){pal.open=false;$('#pal').classList.remove('open')}
+async function palRun(n){const it=pal.items[n];if(!it)return;palClose();await it.run()}
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();pal.open?palClose():palOpen();return}
+  if(!pal.open)return;if(e.key==='Escape')palClose();else if(e.key==='ArrowDown'){e.preventDefault();pal.sel=Math.min(pal.items.length-1,pal.sel+1);palRender()}else if(e.key==='ArrowUp'){e.preventDefault();pal.sel=Math.max(0,pal.sel-1);palRender()}else if(e.key==='Enter'){e.preventDefault();palRun(pal.sel)}});
+document.addEventListener('input',e=>{if(e.target.id==='palq'){pal.q=e.target.value;pal.sel=0;palRender()}});
+document.addEventListener('pointerdown',e=>{const n=e.target.closest&&e.target.closest('.fnode');if(!n)return;fzDrag={id:+n.dataset.id};e.preventDefault()});
+document.addEventListener('pointermove',e=>{if(!fzDrag)return;const box=$('#fz'),l=$('#fzl');if(!box||!l)return;const r=box.getBoundingClientRect(),n=box.querySelector('.fnode[data-id="'+fzDrag.id+'"]').getBoundingClientRect();
+  l.setAttribute('x1',n.left+n.width/2-r.left);l.setAttribute('y1',n.top+n.height/2-r.top);l.setAttribute('x2',e.clientX-r.left);l.setAttribute('y2',e.clientY-r.top);l.style.display='block'});
+document.addEventListener('pointerup',async e=>{if(!fzDrag)return;const from=fzDrag.id;fzDrag=null;const l=$('#fzl');if(l)l.style.display='none';const t=document.elementFromPoint(e.clientX,e.clientY),n=t&&t.closest&&t.closest('.fnode');if(n&&+n.dataset.id!==from)await fuseRun(from,+n.dataset.id)});
 window.addEventListener('hashchange',()=>{tab=(location.hash||'#command').slice(1);if(S)render()});
 load();setInterval(()=>{if(document.visibilityState==='visible'&&['command','articles','subscribers','sources'].includes(tab))silent()},30000);
 </script></body></html>"""

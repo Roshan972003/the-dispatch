@@ -35,6 +35,10 @@ def _next_runs(now):
                 out.append({"label": label, "at": d.isoformat(timespec="minutes")}); break
     return sorted(out, key=lambda x: x["at"])
 
+def fingerprint_of(t):
+    from app.ingest import fingerprint
+    return fingerprint(t)
+
 def select_stories_topics():
     from app.select_stories import TOPICS
     return TOPICS
@@ -47,19 +51,21 @@ def _q_issue(week):
     with db.conn() as c:
         issue = db.one(c, "SELECT * FROM issues WHERE week=?", (week,))
         items = db.all(c, """SELECT i.id, i.position, i.kind, i.topic, i.selection_filter, i.commentary, i.draft_original, i.flags, i.reviewed, i.edited, i.why,
-                             i.counter, i.access, i.alt_url, i.alt_source, i.entities, a.title, a.url, a.source, a.snippet, a.signal, a.signal_filter FROM issue_items i JOIN articles a ON a.id=i.article_id
+                             i.counter, i.access, i.alt_url, i.alt_source, i.entities, i.source_text, i.quotes, a.title, a.url, a.source, a.snippet, a.signal, a.signal_filter FROM issue_items i JOIN articles a ON a.id=i.article_id
                              WHERE i.issue_id=? AND i.kind IN ('selected','backup') ORDER BY i.kind DESC, i.position""", (issue["id"],)) if issue else []
         lc = db.kv_get(c, f"linkcheck:{issue['id']}") if issue else None
     return issue, items, (json.loads(lc) if lc else None)
 
 def _q_articles(week):
     with db.conn() as c:
-        arts = db.all(c, """SELECT a.id, a.title, a.url, a.source, a.status, a.topic, a.published_at, a.signal, a.signal_filter, d.title AS dup_title
+        arts = db.all(c, """SELECT a.id, a.title, a.url, a.source, a.status, a.topic, a.published_at, a.signal, a.signal_filter, a.fingerprint, d.title AS dup_title
                             FROM articles a LEFT JOIN articles d ON d.id=a.dup_of WHERE a.week=? ORDER BY a.published_at DESC LIMIT 600""", (week,))
         counts = {r["status"]: r["n"] for r in db.all(c, "SELECT status, COUNT(*) AS n FROM articles WHERE week=? GROUP BY status", (week,))}
         total = db.one(c, "SELECT COUNT(*) AS n FROM articles")["n"]
         dd = db.one(c, "SELECT SUM(CASE WHEN dup_of IS NOT NULL THEN 1 ELSE 0 END) AS in_week, SUM(CASE WHEN dup_of IS NULL THEN 1 ELSE 0 END) AS past FROM articles WHERE week=? AND status='dup'", (week,))
         counts["_dup_in_week"], counts["_dup_past"] = dd["in_week"] or 0, dd["past"] or 0
+        sc = db.one(c, "SELECT SUM(CASE WHEN signal IS NOT NULL THEN 1 ELSE 0 END) AS scored, SUM(CASE WHEN signal_filter IS NOT NULL THEN 1 ELSE 0 END) AS short, SUM(CASE WHEN signal_filter IS NOT NULL AND signal>=60 THEN 1 ELSE 0 END) AS strong FROM articles WHERE week=? AND status<>'dup'", (week,))
+        counts["_scored"], counts["_strong"], counts["_short"] = sc["scored"] or 0, sc["strong"] or 0, sc["short"] or 0
     return arts, counts, total
 
 def _q_subs():
@@ -84,7 +90,9 @@ def _q_misc():
         edits = db.one(c, "SELECT COUNT(*) AS n, SUM(CASE WHEN promoted=0 THEN 1 ELSE 0 END) AS pending FROM edits")
         from app.select_stories import get_tuner
         tr = db.kv_get(c, f"trends:{config.week_start()}")
-        extras = {"tuner": get_tuner(c), "trends": json.loads(tr) if tr else None, "snooze": db.kv_get(c, "snooze_until")}
+        all_weeks = [r["week"] for r in db.all(c, "SELECT week FROM issues ORDER BY week")]
+        rd = db.kv_get(c, f"repeat_dropped:{config.week_start()}")
+        extras = {"tuner": get_tuner(c), "trends": json.loads(tr) if tr else None, "editions": {w: n + 1 for n, w in enumerate(all_weeks)}, "snooze": db.kv_get(c, "snooze_until"), "repeat_dropped": json.loads(rd) if rd else []}
     return sends, events, last, sg, edits, extras
 
 def _q_memory(week):
@@ -110,7 +118,7 @@ def _q_engagement():
     return {"sent": sent, "delivered": delivered, "opened": opened, "clicked": kinds.get("email.clicked", {}).get("unique", 0),
             "open_rate": round(100 * opened / delivered, 1) if delivered else None, "clicks_by_topic": sorted(by_topic.items(), key=lambda x: -x[1]), "tracked": bool(kinds)}
 
-def build_graph(mem, week):
+def build_graph(mem, week, editions=None, now=None):
     """Entity knowledge graph over the last 5 issues. Nodes are entities; an edge means two entities were covered in the same story."""
     nodes, edges = {}, {}
     for m in mem:
@@ -122,7 +130,9 @@ def build_graph(mem, week):
         for e in ents:
             n = nodes.setdefault(e["name"], {"name": e["name"], "type": e["type"], "weeks": set(), "stories": [], "count": 0})
             n["weeks"].add(m["week"]); n["count"] += 1
-            n["stories"].append({"week": m["week"], "title": m["title"], "topic": m["topic"], "url": m["url"]})
+            thursday = datetime.strptime(m["week"], "%Y-%m-%d") + timedelta(days=3)
+            n["stories"].append({"week": m["week"], "title": m["title"], "topic": m["topic"], "url": m["url"], "edition": (editions or {}).get(m["week"]),
+                                 "days_ago": max(0, (now - thursday).days) if now else None})
             names.append(e["name"])
         for i, a in enumerate(names):
             for b in names[i + 1:]:
@@ -170,6 +180,7 @@ def state(fresh=False):
         f = [ex.submit(_q_issue, week), ex.submit(_q_articles, week), ex.submit(_q_subs), ex.submit(_q_misc), ex.submit(_q_memory, week), ex.submit(_q_engagement)]
         (issue, items, linkcheck), (arts, counts, total_articles), (sub_counts, subs, issues_sent, series), (sends, events, last, sg, edits, extras), mem, engagement = [x.result() for x in f]
     dup_in_week, dup_past = counts.pop("_dup_in_week", 0), counts.pop("_dup_past", 0)
+    n_scored, n_strong, n_short = counts.pop("_scored", 0), counts.pop("_strong", 0), counts.pop("_short", 0)
     for x in subs:                      # subscriber addresses are never shown in full
         x["email"] = mask(x["email"])
     for e in events:
@@ -201,7 +212,7 @@ def state(fresh=False):
         topics[i["topic"]] = topics.get(i["topic"], 0) + 1
     from app.select_stories import voice_checks
     for i in items:
-        for k in ("counter", "entities"):
+        for k in ("counter", "entities", "quotes"):
             try:
                 i[k] = json.loads(i.get(k) or "[]")
             except Exception:
@@ -265,8 +276,54 @@ def state(fresh=False):
     launchpad = {"armed": all(c["ok"] for c in checks), "confirmed": is_confirmed, "checks": checks,
                  "headline": ("ARMED: sends Thursday 8:00 AM IST" if status == "approved" else "SENT" if status == "sent" else "SENDING" if status == "sending" else "ARMED") if all(c["ok"] for c in checks)
                              else "SAFE: nothing can send until Shreya confirms"}
+    from app.ingest import similar as _sim
+    past_pairs = [(m["title"], m["week"], fingerprint_of(m["title"])) for m in mem if m["week"] != week]
+    dropped = {r["title"]: r["reason"] for r in extras.get("repeat_dropped", [])}
+    runner = {i["title"]: i["position"] for i in items if i["kind"] == "backup"}
+    for a in arts:
+        sg_, fl = a.get("signal"), (a.get("signal_filter") or "NONE")
+        if a["status"] == "dup":
+            if a.get("dup_title"):
+                a["reason"] = f"Duplicate of \u201c{a['dup_title'][:80]}\u201d. The first copy was kept."
+            else:
+                m = next((p for p in past_pairs if _sim(a.get("fingerprint") or "", p[2])), None)
+                a["reason"] = f"Already covered: matches \u201c{m[0][:70]}\u201d from the {m[1]} issue." if m else "Matches a story from the last four issues."
+        elif a["status"] == "selected":
+            a["reason"] = "Picked for this issue."
+        elif a["title"] in dropped:
+            a["reason"] = "Dropped by the repeat guard: it " + dropped[a["title"]] + "."
+        elif a["title"] in runner:
+            a["reason"] = f"Runner-up #{runner[a['title']]}: kept in reserve for the Swap carousel."
+        elif a["source"] == "Added by Shreya":
+            a["reason"] = "Hand-picked by Shreya; in the pool for selection."
+        elif sg_ is None:
+            a["reason"] = "Not scored."
+        elif fl == "NONE" and sg_ is not None and a.get("signal_filter") is None:
+            a["reason"] = f"Pre-screen {sg_}/100: below the cut for the full editorial pass (the top 90 of the week go forward)."
+        elif sg_ < 40:
+            a["reason"] = f"Low signal ({sg_}/100): " + ("did not pass any of the three editorial filters." if fl == "NONE" else f"only weakly {fl.lower()}.")
+        elif sg_ < 70:
+            a["reason"] = f"Mid signal ({sg_}/100): not strong enough against this week\u2019s batch."
+        else:
+            a["reason"] = f"Strong signal ({sg_}/100) but outranked: the issue holds 8 to 10 stories across balanced sectors."
+        a.pop("fingerprint", None)
+    n_total = sum(counts.values())
+    funnel = [{"label": "Ingested", "n": n_total, "note": "RSS feeds, Google News and 3 news APIs"},
+              {"label": "After de-duplication", "n": n_total - counts.get("dup", 0), "note": f"{counts.get('dup', 0)} dropped as duplicates ({dup_in_week} in-week, {dup_past} already in the last four issues)"},
+              {"label": "Pre-screened by Gemini", "n": n_scored, "note": "every candidate headline gets a 0 to 100 editorial signal"},
+              {"label": "Shortlisted", "n": n_short, "note": "the top 90 go to the full editorial pass (max 14 per source)"},
+              {"label": "Strong signal (60+)", "n": n_strong, "note": "of the shortlist"},
+              {"label": "Picked", "n": len(sel), "note": f"{len(extras.get('repeat_dropped', []))} more dropped by the repeat guard" if extras.get("repeat_dropped") else "final 8 to 10"}]
     growth = {"active": active, "target": 2200, "series": series}
-    graph = build_graph(mem, week)
+    deliv = []
+    if issue and sel:
+        try:
+            from app.email_template import render as _render, deliverability
+            sub_, html_, text_ = _render({**issue, "selection_notes": issue.get("selection_notes")}, sel)
+            deliv = deliverability(sub_, html_, text_, config.RESEND_FROM)
+        except Exception:
+            deliv = []
+    graph = build_graph(mem, week, extras.get("editions"), now)
     trends = extras["trends"]
     if trends:      # attach titles and sector overlap so the heatmap needs no further lookups
         by = {a["id"]: a for a in arts}
@@ -289,7 +346,7 @@ def state(fresh=False):
         "keys": {k: bool(config.env(k)) for k in ["GEMINI_API_KEY", "DATABASE_URL", "TELEGRAM_BOT_TOKEN", "RESEND_API_KEY", "RESEND_WEBHOOK_SECRET", "NEWSAPI_KEY", "GNEWS_API_KEY", "NEWSDATA_API_KEY"]},
         "model": config.GEMINI_MODEL, "sender": config.RESEND_FROM,
         "memory": memory, "balance": balance, "approval": approval, "launchpad": launchpad, "growth": growth, "engagement": engagement, "benchmark_open_rate": 38,
-        "graph": graph, "trends": trends, "linkcheck": linkcheck, "tuner": extras["tuner"], "reminder": reminder_info(week, issue, extras["snooze"]),
+        "deliverability": deliv, "funnel": funnel, "graph": graph, "trends": trends, "linkcheck": linkcheck, "tuner": extras["tuner"], "reminder": reminder_info(week, issue, extras["snooze"]),
         "buzz": BUZZ_SWAPS, "unsub_reasons": series.get("reasons", []),
         "scored": sum(1 for a in arts if a.get("signal") is not None), "bot": "https://t.me/Dispatch_Mesa_Bot",
     }
@@ -452,3 +509,23 @@ async def snooze(request: Request):
         db.log(c, "snooze", f"reminder snoozed until {until}")
     _cache["data"] = None
     return {"ok": True, "message": f"Reminder snoozed until {until[11:]} IST."}
+
+
+@router.post("/api/admin/fuse")
+async def fuse(request: Request):
+    """Trend-Fusion canvas: connect two of this week's stories into one commentary block. Preview only; nothing is saved to the draft."""
+    same_origin(request)
+    left = _cooldown("preview", 6)
+    if left:
+        return JSONResponse({"ok": False, "message": f"One moment, try again in {left}s."})
+    from app import styleguide, select_stories
+    b = await request.json()
+    with db.conn() as c:
+        rows = {r["id"]: r for r in db.all(c, """SELECT i.id, i.source_text, a.title, a.source, a.snippet FROM issue_items i JOIN articles a ON a.id=i.article_id
+                                                 WHERE i.id IN (?, ?) AND i.kind IN ('selected','backup')""", (int(b.get("a", 0)), int(b.get("b", 0))))}
+        sg = styleguide.active(c)
+    if len(rows) != 2:
+        raise HTTPException(404)
+    x, y = rows[int(b["a"])], rows[int(b["b"])]
+    text, errs = select_stories.fuse(sg, x, y)
+    return {"ok": True, "commentary": text, "checks": select_stories.voice_checks(text, x["title"] + " " + y["title"], f"{x['snippet'] or ''} {y['snippet'] or ''} {x.get('source_text') or ''} {y.get('source_text') or ''}", sg["banned"])}

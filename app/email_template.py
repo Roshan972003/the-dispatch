@@ -111,3 +111,28 @@ def render(issue, items, token="preview"):
         text.append("")
     text += ["— Shreya", "", f"Share The Dispatch: {base}", f"View in browser: {view}", f"Unsubscribe: {unsub}"]
     return subject, html, "\n".join(text)
+
+
+SPAMMY = ("free!!!", "act now", "winner", "guarantee", "click here", "100% free", "cash bonus", "buy now", "limited time", "no obligation", "risk-free", "urgent")
+SHORTENERS = ("bit.ly", "tinyurl", "t.co/", "goo.gl", "ow.ly", "is.gd")
+
+def deliverability(subject, html, text, sender):
+    """Local spam-risk heuristics for the assembled email. Not a SpamAssassin run: it checks the things that actually move inbox placement for a text newsletter."""
+    import re
+    links = re.findall(r'href="(https?://[^"]+)"', html)
+    low = (subject + " " + text).lower()
+    caps = re.findall(r"\b[A-Z]{4,}\b", subject)
+    checks = [
+        ("Subject length 25 to 60 characters", 25 <= len(subject) <= 60, f"{len(subject)} characters"),
+        ("No exclamation marks or all-caps words in the subject", "!" not in subject and not caps, "clean" if "!" not in subject and not caps else "found"),
+        ("No spam-trigger phrases in the subject or preheader", not [w for w in SPAMMY if w in (subject + " " + (re.findall(r"display:none[^>]*>([^<]+)<", html) or [""])[0]).lower()],
+         "clean" + (f" (body mentions: {', '.join(w for w in SPAMMY if w in low)})" if [w for w in SPAMMY if w in low] else "")),
+        ("Plain-text version included", bool(text.strip()), f"{len(text)} characters"),
+        ("One-click unsubscribe present", "/unsubscribe?t=" in html, "link in the footer + List-Unsubscribe header"),
+        ("No images or tracking pixels", "<img" not in html.lower(), "text-only, loads instantly"),
+        ("No link shorteners; https only", not any(x in l for l in links for x in SHORTENERS) and all(l.startswith("https://") or "localhost" in l for l in links), f"{len(links)} links"),
+        ("Under Gmail's 102 KB clipping limit", len(html.encode()) < 102000, f"{len(html.encode()) // 1024} KB"),
+        ("Preheader text set", "display:none" in html and len(re.findall(r"display:none[^>]*>([^<]+)<", html)[0].strip() if re.findall(r"display:none[^>]*>([^<]+)<", html) else "") > 10, "inbox preview line"),
+        ("Sent from a verified domain", "resend.dev" not in sender, "using Resend's shared test sender" if "resend.dev" in sender else sender),
+    ]
+    return [{"rule": r, "ok": bool(ok), "detail": d} for r, ok, d in checks]

@@ -44,6 +44,18 @@ def cron_send():
     from app import pipeline
     return pipeline.thursday_send()
 
+@app.get("/api/cron/voice", dependencies=[Depends(cron_auth)])
+def cron_voice():
+    """Monthly: fold Shreya's edits (and her voice notes) into a NEW style-guide version as few-shot examples. Older versions are kept."""
+    from app import styleguide, telegram
+    with db.conn() as c:
+        n = db.one(c, "SELECT COUNT(*) AS n FROM edits WHERE promoted=0")["n"]
+        v = styleguide.promote_edits(c, n=12)
+        db.log(c, "voice_evolution", f"style guide -> v{v}" if v else "no new edits")
+    if v:
+        telegram.say(f"🧬 <b>Your voice guide just learned from your edits.</b> Style guide is now v{v} ({n} new edit(s) added as examples). Older versions are kept.")
+    return {"promoted": v, "edits_considered": n}
+
 # ---------------- Telegram ----------------
 @app.post("/api/telegram/webhook")
 async def telegram_webhook(request: Request):

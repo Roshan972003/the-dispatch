@@ -17,6 +17,10 @@ def candidates(c, week, limit=90):
             out.append(r); per[r["source"]] = per.get(r["source"], 0) + 1
     return out[:limit]
 
+def candidates_all(c, week):
+    """Every non-duplicate article of the week (Monday to Wednesday), newest first. No recency cut: Monday's stories compete with Wednesday's."""
+    return db.all(c, "SELECT id, source, title, snippet, url, published_at FROM articles WHERE week=? AND status='new' ORDER BY published_at DESC", (week,))
+
 def recent_titles(c, week):
     rows = db.all(c, """SELECT a.title FROM issue_items i JOIN issues s ON s.id=i.issue_id JOIN articles a ON a.id=i.article_id
                         WHERE i.kind='selected' AND s.week IN (SELECT week FROM issues WHERE week < ? ORDER BY week DESC LIMIT ?)""",
@@ -49,6 +53,37 @@ def _selection_errors(res, ids):
         seen.append(t)
     return errs
 
+PRESCREEN_SCHEMA = {"type": "OBJECT", "properties": {"scores": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
+    "id": {"type": "INTEGER"}, "s": {"type": "INTEGER"}}, "required": ["id", "s"]}}}, "required": ["scores"]}
+SHORTLIST = 90
+
+def prescreen(sg, cands):
+    """One compact Gemini pass over EVERY candidate headline (chunks run in parallel): editorial signal 0-100 against the three filters."""
+    def chunk(items):
+        cj = "\n".join(f'{a["id"]}|{a["source"]}|{a["title"]}|{(a["snippet"] or "")[:90]}' for a in items)
+        res = gemini.generate("You are the editorial selector for The Dispatch. Triage fast.",
+            f"FILTERS:\n{sg['filters']}\n\nScore each candidate 0-100 for how strongly it passes at least one filter (counterintuitive, under-reported, trend-connecting). "
+            f"Press releases, routine funding announcements, listicles, restated headlines and anything not about India's startup/tech/business ecosystem score under 30. "
+            f"Lines are id|source|headline|snippet. Return every id.\n{cj}", PRESCREEN_SCHEMA, 0.1)
+        return {x["id"]: max(0, min(100, int(x["s"]))) for x in res.get("scores", [])}
+    parts = [cands[i::10] for i in range(10)]        # ~60 headlines per call: small enough to answer fast and reliably
+    out = {}
+    with ThreadPoolExecutor(10) as ex:
+        for r in ex.map(lambda p: _safe(chunk, p) or {}, parts):
+            out.update(r)
+    return out
+
+def shortlist(cands, pre):
+    """Top SHORTLIST by pre-screen score with a per-source cap for variety. Hand-picked stories always go through."""
+    ranked = sorted(cands, key=lambda a: (a["source"] == "Added by Shreya", pre.get(a["id"], -1)), reverse=True)
+    per, out = {}, []
+    for a in ranked:
+        if a["source"] == "Added by Shreya" or per.get(a["source"], 0) < 14:
+            out.append(a); per[a["source"]] = per.get(a["source"], 0) + 1
+        if len(out) >= SHORTLIST:
+            break
+    return out
+
 def select(sg, cands, recent):
     ids = {a["id"]: a for a in cands}
     system = ("You are the editorial selector for The Dispatch, a weekly newsletter on the Indian startup ecosystem. "
@@ -59,7 +94,8 @@ def select(sg, cands, recent):
             f"- collectively cover at least {config.MIN_TOPICS} different topic areas\n"
             "- are not about a company-event already listed in RECENT_ISSUES\n"
             "- are high signal relative to this week's batch (reject press releases, pure funding announcements and restated headlines)\n"
-            "- are not two stories about the same event\n\n"
+            "- are not two stories about the same event\n"
+            "- candidates whose source is 'Added by Shreya' were hand-picked by her this week: include them unless they break these rules (already covered recently, or not about India's startup ecosystem)\n\n"
             f"FILTERS:\n{sg['filters']}\n\nRECENT_ISSUES (do not repeat these stories or events):\n" + ("\n".join("- " + t for t in recent) or "(none yet)") +
             f"\n\nCANDIDATES:\n{cj}\n\nOrder 'selected' by editorial strength. 'backups': 6 ranked replacements for the Swap button, ideally from topics under-represented in 'selected'. "
             "'reason' is one sentence. 'week_theme' is one line.")
@@ -177,15 +213,16 @@ def tuner_text(t):
 
 def draft_one(sg, story, tuner=None, instruction=""):
     system = _system(sg) + tuner_text(tuner or get_tuner())
+    body = (story.get("body") or "")[:1800]
     prompt = (f"Story:\n  Title: {story['title']}\n  Source: {story['source']}\n  Snippet: {story['snippet'] or '(none; reason from structure only)'}\n"
-              f"  Selection filter: {story['selection_filter']}\n\n"
+              + (f"  Article text (extract): {body}\n" if body else "") + f"  Selection filter: {story['selection_filter']}\n\n"
               + (f"Extra instruction from Shreya for this rewrite: {instruction}\n\n" if instruction else "") +
               "Write the commentary. Use only facts in the snippet. Return ONLY JSON: {\"commentary\": \"...\"}")
     text, errs = "", []
     for attempt in range(2):
         extra = "" if not errs else "\n\nFailed: " + "; ".join(errs) + ". Rewrite."
         text = gemini.generate(system, prompt + extra, DRAFT_SCHEMA, 0.7)["commentary"].strip()
-        errs = validate_commentary(text, story["title"], story["snippet"] or "", sg["banned"])
+        errs = validate_commentary(text, story["title"], (story["snippet"] or "") + " " + body, sg["banned"])
         if not errs:
             break
     return text, errs
@@ -239,7 +276,7 @@ def recent_entity_keys(c, week):
 
 def repeat_guard(stories, backs, ents, past_keys):
     """Swap out any pick that names a company/person already in this issue or in the last four issues, using the best runner-up that does not.
-    Returns (final_stories, remaining_backups, replaced_titles). Keeps the sector spread; if it cannot, it leaves the original picks alone."""
+    Returns (final_stories, remaining_backups, replaced) where replaced is [{title, reason}]. Keeps the sector spread; if it cannot, it leaves the original picks alone."""
     keys = lambda sid: {e["name"].strip().lower() for e in ents.get(sid, []) if e["type"] in KEY_TYPES}
     pool, final, used, replaced = list(backs), [], set(), []
     for st in stories:
@@ -247,7 +284,9 @@ def repeat_guard(stories, backs, ents, past_keys):
         if ks & used or ks & past_keys:
             alt = next((b for b in pool if not (keys(b["id"]) & (used | past_keys))), None)
             if alt:
-                pool.remove(alt); final.append(alt); used |= keys(alt["id"]); replaced.append(st["title"]); continue
+                clash = sorted((ks & used) | (ks & past_keys))
+                pool.remove(alt); final.append(alt); used |= keys(alt["id"])
+                replaced.append({"title": st["title"], "reason": ("repeats " + ", ".join(clash) + (" (already in this issue)" if ks & used else " (covered in the last four issues)")) if clash else "repeat"}); continue
         final.append(st); used |= ks
     if len({x["topic"] for x in final}) < config.MIN_TOPICS or len(final) < config.PICK_MIN:
         return stories, backs, []
@@ -255,6 +294,22 @@ def repeat_guard(stories, backs, ents, past_keys):
     for n, st in enumerate(final, 1):
         st["pos"] = n
     return final, pool, replaced
+
+def fuse(sg, a, b, tuner=None):
+    """Trend-Connecting commentary for two stories: one block that names the link between them. Preview only."""
+    system = _system(sg) + tuner_text(tuner or get_tuner())
+    block = "\n\n".join(f"Story {n}: {x['title']} ({x['source']})\nSnippet: {x['snippet'] or '(none)'}\nArticle text: {(x.get('source_text') or '')[:900]}" for n, x in ((1, a), (2, b)))
+    prompt = (f"{block}\n\nWrite ONE commentary block in Shreya's voice that connects these two stories into a trend nobody has stated yet (TREND-CONNECTING). "
+              "Name both developments, state the link as the claim, give the mechanism, close with what to watch. Use only facts present above; never invent figures. "
+              "Return ONLY JSON: {\"commentary\": \"...\"}")
+    text, errs = "", []
+    for _ in range(2):
+        extra = "" if not errs else "\n\nFailed: " + "; ".join(errs) + ". Rewrite."
+        text = gemini.generate(system, prompt + extra, DRAFT_SCHEMA, 0.7)["commentary"].strip()
+        errs = validate_commentary(text, a["title"] + " " + b["title"], f"{a['snippet'] or ''} {b['snippet'] or ''} {a.get('source_text') or ''} {b.get('source_text') or ''}", sg["banned"])
+        if not errs:
+            break
+    return text, errs
 
 def _safe(fn, *a):
     try:
@@ -264,19 +319,22 @@ def _safe(fn, *a):
 
 # ---------------- devil's advocate, trend fusion, subject lines, voice notes ----------------
 ANGLE_SCHEMA = {"type": "OBJECT", "properties": {
-    "stories": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {"id": {"type": "INTEGER"}, "counter": {"type": "ARRAY", "items": {"type": "STRING"}}}, "required": ["id", "counter"]}},
+    "stories": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {"id": {"type": "INTEGER"}, "counter": {"type": "ARRAY", "items": {"type": "STRING"}},
+                "quotes": {"type": "ARRAY", "items": {"type": "STRING"}}}, "required": ["id", "counter", "quotes"]}},
     "fusions": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {"a": {"type": "INTEGER"}, "b": {"type": "INTEGER"}, "angle": {"type": "STRING"}}, "required": ["a", "b", "angle"]}}},
     "required": ["stories", "fusions"]}
 
 def angles(stories):
     """Per story: three counter-thesis prompts (what the press may be missing). Across stories: up to three trend fusions. Framed as things to check, never as facts."""
-    block = "\n".join(json.dumps({"id": s["id"], "pos": s["pos"], "title": s["title"], "snippet": (s.get("snippet") or "")[:240]}) for s in stories)
+    block = "\n".join(json.dumps({"id": s["id"], "pos": s["pos"], "title": s["title"], "snippet": (s.get("snippet") or "")[:240], "article_text": (s.get("body") or "")[:1500]}) for s in stories)
     res = gemini.generate("You are a sceptical editor's research assistant for The Dispatch, a newsletter on Indian startups.",
         "For EACH story give exactly 3 short counter-thesis bullets: what the mainstream press may be ignoring (hidden terms, regulatory fine print, unit economics, second-order effects). "
         "Phrase each as something to CHECK or a question to ask, never as a fact. Do not invent numbers, names or clauses that are not in the text.\n"
         "Then suggest up to 3 'fusions': pairs of stories (by 'pos') that connect into one trend nobody has stated, with a one-sentence angle Shreya could write.\n" + block, ANGLE_SCHEMA, 0.5)
     by_id = {s["id"] for s in stories}
-    return {"counter": {x["id"]: x["counter"][:3] for x in res.get("stories", []) if x["id"] in by_id},
+    body = {s["id"]: s.get("body") or "" for s in stories}
+    quotes = {x["id"]: [q.strip() for q in x.get("quotes", []) if q.strip() and q.strip() in body.get(x["id"], "")][:2] for x in res.get("stories", []) if x["id"] in by_id}   # verbatim only
+    return {"quotes": quotes, "counter": {x["id"]: x["counter"][:3] for x in res.get("stories", []) if x["id"] in by_id},
             "fusions": [f for f in res.get("fusions", []) if f["a"] != f["b"]][:3]}
 
 SUBJ_SCHEMA = {"type": "OBJECT", "properties": {"options": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
@@ -313,26 +371,36 @@ def voice_to_commentary(sg, story, audio, mime="audio/ogg", tuner=None):
     return out["commentary"].strip(), out["transcript"].strip(), errs
 
 def run_selection(force=False):
+    import time
     from app import access
+    T0 = time.time(); tm = {}
+    lap = lambda k: tm.__setitem__(k, round(time.time() - T0)) 
     week = config.week_start()
     with db.conn() as c:
         issue = db.one(c, "SELECT * FROM issues WHERE week=?", (week,))
         if issue and issue["status"] != "collecting" and not force:
             return {"week": week, "skipped": f"issue already {issue['status']}"}
-        cands, recent, sg, tuner = candidates(c, week), recent_titles(c, week), styleguide.active(c), get_tuner(c)
+        all_cands, recent, sg, tuner = candidates_all(c, week), recent_titles(c, week), styleguide.active(c), get_tuner(c)
         pool_all = db.all(c, "SELECT title, url, source, fingerprint FROM articles WHERE week=?", (week,))
-    if len(cands) < config.PICK_MAX:
-        return {"week": week, "error": f"only {len(cands)} candidates"}
-    res, flag = select(sg, cands, recent)
+    if len(all_cands) < config.PICK_MAX:
+        return {"week": week, "error": f"only {len(all_cands)} candidates"}
+    pre = prescreen(sg, all_cands); lap('prescreen')
+    cands = shortlist(all_cands, pre) if len(pre) > SHORTLIST // 2 else all_cands[:SHORTLIST]      # if the pre-screen failed, fall back to the newest
+    res, flag = select(sg, cands, recent); lap('select')
     by_id = {a["id"]: a for a in cands}
     stories = [{**by_id[s["article_id"]], "selection_filter": s["selection_filter"], "topic": s["topic_area"], "why": s["reason"], "pos": n}
                for n, s in enumerate(res["selected"], 1)]
     backs = [{**by_id[b["article_id"]], "selection_filter": b["selection_filter"], "topic": b["topic_area"], "why": b["reason"]} for b in res["backups"] if b["article_id"] in by_id]
-    ents = _safe(extract_entities, stories + backs[:10]) or {}
+    ents = _safe(extract_entities, stories + backs[:10]) or {}; lap('entities')
     with db.conn() as c:
         past_keys = recent_entity_keys(c, week)
     stories, backs, replaced = repeat_guard(stories, backs, ents, past_keys)
     top3 = backs[:3]
+    from app import readable
+    with ThreadPoolExecutor(10) as ex:         # real article text for the source pane, key quotes and richer commentary (Google News links cannot be read)
+        for st, got in zip(stories + top3, ex.map(lambda x: _safe(readable.extract, x["url"]), stories + top3)):
+            st["body"] = (got or {}).get("text") or ""
+    lap('article_text')
     with ThreadPoolExecutor(12) as ex:   # independent Gemini jobs and link checks run together
         fd = [ex.submit(draft_one, sg, s, tuner) for s in stories]
         fb = [ex.submit(draft_one, sg, s, tuner) for s in top3]
@@ -342,6 +410,7 @@ def run_selection(force=False):
         drafts, bdrafts = [f.result() for f in fd], [f.result() for f in fb]
         scores, trends = fs.result() or {}, ft.result() or []
         ang, subjects, acc = fa.result() or {"counter": {}, "fusions": []}, fj.result() or [], fx.result() or {}
+    lap('parallel_jobs')
     notes = (res.get("week_theme") or "") + (f"\nFLAG: {flag}" if flag else "")
     now = config.now_ist().isoformat(timespec="seconds")
     with db.conn() as c:
@@ -352,21 +421,25 @@ def run_selection(force=False):
             iid = db.insert(c, "INSERT INTO issues (week, status, created_at) VALUES (?,?,?)", (week, "collecting", now))
         for s, (text, errs) in zip(stories, drafts):
             a = acc.get(s["id"], {})
-            db.run(c, """INSERT INTO issue_items (issue_id, article_id, position, kind, commentary, draft_original, topic, why, selection_filter, flags, entities, counter, access, alt_url, alt_source)
-                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (iid, s["id"], s["pos"], "selected", text, text, s["topic"], s["why"], s["selection_filter"], "; ".join(errs),
-                          json.dumps(ents.get(s["id"], [])), json.dumps(ang["counter"].get(s["id"], [])), a.get("access"), a.get("alt_url"), a.get("alt_source")))
+            db.run(c, """INSERT INTO issue_items (issue_id, article_id, position, kind, commentary, draft_original, topic, why, selection_filter, flags, entities, counter, access, alt_url, alt_source, source_text, quotes)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (iid, s["id"], s["pos"], "selected", text, text, s["topic"], s["why"], s["selection_filter"], "; ".join(errs),
+                          json.dumps(ents.get(s["id"], [])), json.dumps(ang["counter"].get(s["id"], [])), a.get("access"), a.get("alt_url"), a.get("alt_source"),
+                          s.get("body") or None, json.dumps(ang.get("quotes", {}).get(s["id"], []))))
             db.run(c, "UPDATE articles SET status='selected', topic=? WHERE id=?", (s["topic"], s["id"]))
         for pos, b in enumerate(backs, 1):
             text = bdrafts[pos - 1][0] if pos <= len(bdrafts) else None
             a = acc.get(b["id"], {})
             db.run(c, """INSERT INTO issue_items (issue_id, article_id, position, kind, commentary, draft_original, topic, why, selection_filter, access, alt_url, alt_source)
                          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""", (iid, b["id"], pos, "backup", text, text, b["topic"], b["why"], b["selection_filter"], a.get("access"), a.get("alt_url"), a.get("alt_source")))
-        db.many(c, "UPDATE articles SET signal=?, signal_filter=? WHERE id=?", [(v[0], v[1], k) for k, v in scores.items()])
+        db.run(c, "UPDATE articles SET signal=NULL, signal_filter=NULL WHERE week=?", (week,))      # drop scores from earlier runs so the funnel is honest
+        db.many(c, "UPDATE articles SET signal=? WHERE id=? AND signal_filter IS NULL", [(v, k) for k, v in pre.items()])      # everyone gets a pre-screen score
+        db.many(c, "UPDATE articles SET signal=?, signal_filter=? WHERE id=?", [(v[0], v[1], k) for k, v in scores.items()])      # the shortlist gets the detailed score
         if trends:
             db.kv_set(c, f"trends:{week}", json.dumps({"week": week, "clusters": trends}))
+        db.kv_set(c, f"repeat_dropped:{week}", json.dumps(replaced))
         db.run(c, "UPDATE issues SET status='drafted', approved_at=NULL, reminder_sent=0, drafted_at=?, selection_notes=?, subject_options=?, subject=?, preheader=?, fusions=? WHERE id=?",
                (now, notes, json.dumps(subjects), subjects[0]["subject"] if subjects else None, subjects[0]["preheader"] if subjects else None, json.dumps(ang["fusions"]), iid))
         db.log(c, "select", f"issue {iid}: {len(stories)} picks, style v{sg['version']}, flag={flag}")
     return {"week": week, "issue_id": iid, "picks": len(stories), "topics": sorted({s["topic"] for s in stories}),
             "style_version": sg["version"], "selection_flag": flag, "comment_flags": sum(1 for _, e in drafts if e), "scored": len(scores), "trend_clusters": len(trends),
-            "subjects": len(subjects), "access_checked": len(acc), "repeats_replaced": replaced}
+            "subjects": len(subjects), "access_checked": len(acc), "repeats_replaced": [r["title"] for r in replaced], "prescreened": len(pre), "shortlisted": len(cands), "seconds": round(time.time() - T0), "timings": tm}

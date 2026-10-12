@@ -47,9 +47,11 @@ CREATE TABLE IF NOT EXISTS events (
 """
 PG_SCHEMA = SCHEMA.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
 
-MIGRATIONS = [("articles", "signal", "INTEGER"), ("articles", "signal_filter", "TEXT"), ("issue_items", "entities", "TEXT"), ("subscribers", "unsub_reason", "TEXT"), ("subscribers", "name", "TEXT"),
+MIGRATIONS = [("articles", "signal", "INTEGER"), ("articles", "signal_filter", "TEXT"), ("issue_items", "entities", "TEXT"), ("subscribers", "unsub_reason", "TEXT"), ("subscribers", "name", "TEXT"), ("issue_items", "source_text", "TEXT"), ("issue_items", "quotes", "TEXT"),
               ("issue_items", "counter", "TEXT"), ("issue_items", "access", "TEXT"), ("issue_items", "alt_url", "TEXT"), ("issue_items", "alt_source", "TEXT"),
               ("issues", "subject_options", "TEXT"), ("issues", "subject", "TEXT"), ("issues", "preheader", "TEXT"), ("issues", "fusions", "TEXT")]   # columns added after first release
+import threading
+_SETUP_LOCK = threading.Lock()
 _READY = False
 
 @contextmanager
@@ -64,16 +66,22 @@ def conn():
         c = sqlite3.connect(config.DB_PATH)
         c.row_factory = sqlite3.Row
     if not _READY:
-        if PG:
-            c.execute(PG_SCHEMA)
-        else:
-            c.executescript(SCHEMA)
-        for t, col, typ in MIGRATIONS:
-            if PG:
-                c.execute(f"ALTER TABLE {t} ADD COLUMN IF NOT EXISTS {col} {typ}")
-            elif col not in {r[1] for r in c.execute(f"PRAGMA table_info({t})")}:
-                c.execute(f"ALTER TABLE {t} ADD COLUMN {col} {typ}")
-        _READY = True
+        with _SETUP_LOCK:               # one thread sets up the schema; the rest wait, then skip
+            if not _READY:
+                if PG:
+                    c.execute("SELECT pg_advisory_xact_lock(727201)")     # also serialises separate serverless instances
+                    c.execute(PG_SCHEMA)
+                else:
+                    c.executescript(SCHEMA)
+                for t, col, typ in MIGRATIONS:
+                    if PG:
+                        have = c.execute("SELECT 1 FROM information_schema.columns WHERE table_name=%s AND column_name=%s", (t, col)).fetchone()
+                        if not have:    # ALTER ... IF NOT EXISTS still takes a heavy lock even when it does nothing, so only run it when needed
+                            c.execute(f"ALTER TABLE {t} ADD COLUMN IF NOT EXISTS {col} {typ}")
+                    elif col not in {r[1] for r in c.execute(f"PRAGMA table_info({t})")}:
+                        c.execute(f"ALTER TABLE {t} ADD COLUMN {col} {typ}")
+                c.commit()
+                _READY = True
     try:
         yield c
         c.commit()
