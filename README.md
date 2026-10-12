@@ -81,4 +81,6 @@ Useful scripts: `scripts/import_subscribers.py` (import Shreya's real list as ac
 - **Sending domain.** Mail is sent from Resend's shared test address, which can only deliver to the Resend account owner. Reaching real subscribers needs a domain verified in Resend. Until then, new sign-ups are added instantly instead of by confirmation email.
 - **Vercel Hobby cron** runs each job at some point in the hour after its scheduled time, so "10 PM" is 10 to 11 PM and "Wednesday 2 PM" is 2 to 3 PM IST. Never early.
 - **Open and click analytics** are wired to Resend webhooks but stay empty (nothing is estimated) until mail goes out from a verified domain.
+- **GDELT** (one of the news APIs) allows one request per 5 seconds and often refuses Vercel's shared servers. The system retries, and if it is still refused it skips GDELT for that run and says so in the Sources tab. Every other source is unaffected.
+- **Engagement panel:** shows clearly labelled sample numbers until real opens and clicks arrive from Resend.
 - Voice notes and button rewrites take a few seconds because they call Gemini.
