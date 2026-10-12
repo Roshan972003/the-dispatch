@@ -13,7 +13,10 @@ def cron_auth(request: Request):
 def health():
     with db.conn() as c:
         n = db.one(c, "SELECT COUNT(*) AS n FROM articles")["n"]
-    return {"ok": True, "articles": n}
+    keys = ["GEMINI_API_KEY", "DATABASE_URL", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_WEBHOOK_SECRET", "RESEND_API_KEY",
+            "RESEND_WEBHOOK_SECRET", "CRON_SECRET", "NEWSAPI_KEY", "GNEWS_API_KEY", "NEWSDATA_API_KEY"]
+    return {"ok": True, "articles": n, "public_url": config.PUBLIC_URL, "db": "postgres" if db.PG else "sqlite",
+            "configured": {k: bool(config.env(k)) for k in keys}}   # booleans only, never values
 
 # ---------------- cron ----------------
 @app.get("/api/cron/ingest", dependencies=[Depends(cron_auth)])
