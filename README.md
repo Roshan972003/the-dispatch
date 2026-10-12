@@ -44,7 +44,7 @@ Nothing is ever emailed without her explicit, two-step confirmation (see *Safegu
 
 ## What the dashboard shows
 
-Open `/dashboard`. Command (approval status, the 10 PM deadline, the signal funnel), Curation (voice tuner, voice-check editor, reasoning cards with source text, trend-fusion canvas), Intelligence (entity graph, trend heatmap, 4-week archive matrix), Telegram lab, Delivery (fail-safe launchpad, email preview, link and deliverability checks, social export), Subscribers, Articles (every article with the reason it was kept or dropped) and Sources. Press **⌘K / Ctrl+K** for the command palette.
+Open `/dashboard`. **Overview** (plain-English status, approval timeline, the signal funnel), **Review the draft** (voice tuner, voice-check editor, reasoning cards with source text, trend-fusion canvas), **Insights** (entity graph, trend heatmap, 4-week archive matrix), **Telegram** (a simulator of the review chat), **Email & send** (fail-safe launchpad, email preview, link and deliverability checks, social export), **Subscribers**, **All articles** (every article with the reason it was kept or dropped) and **Sources**. Press **⌘K / Ctrl+K** for the command palette.
 
 It is open so it can be shown to anyone. It can preview and rate-limited-run the pipeline, but it can **never** approve or send an issue: that only happens in Telegram.
 

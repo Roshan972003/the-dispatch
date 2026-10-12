@@ -36,9 +36,9 @@ def _unique(items):
 
 CSS = """<style>
 body,table,td{-webkit-text-size-adjust:100%}a{color:inherit}
-@media (max-width:620px){.wrap{padding:0 !important}.card{padding:26px 20px !important;border-radius:0 !important}.mast{font-size:36px !important}.hd{font-size:22px !important}.take{font-size:17px !important}.btn{display:block !important;margin:0 0 8px !important;text-align:center !important}}
-@media (prefers-color-scheme:dark){body,.bg{background:#12110f !important}.card{background:#1b1915 !important}.ink{color:#f3efe6 !important}.mut{color:#aaa397 !important}.rule{border-color:#33302a !important}
-.takebox{background:#26221b !important;border-color:#f59e0b !important}.lk{color:#fbbf24 !important}.chip{background:#2d2820 !important;color:#fbbf24 !important}.btn{background:#26221b !important;color:#f3efe6 !important;border-color:#3b362d !important}}
+@media (max-width:620px){.wrap{padding:0 !important}.card{border-radius:0 !important}.pad{padding-left:22px !important;padding-right:22px !important}.mast{font-size:38px !important}.hd{font-size:23px !important}.take{font-size:17px !important}.num{font-size:34px !important}.btn{display:block !important;margin:0 0 8px !important;text-align:center !important}}
+@media (prefers-color-scheme:dark){body,.bg{background:#0d0c0a !important}.card{background:#171512 !important}.ink{color:#f3efe6 !important}.mut{color:#a8a195 !important}.rule{border-color:#2c2923 !important}
+.takebox{background:#211e18 !important}.lk{color:#e8b64c !important}.pill{border-color:#3a352c !important;color:#c9c2b3 !important}.btn{background:#211e18 !important;color:#f3efe6 !important;border-color:#3a352c !important}.edit{background:#1d1a15 !important}.head{background:#000 !important}.foot{background:#0f0e0c !important}}
 </style>"""
 
 def render(issue, items, token="preview"):
@@ -52,59 +52,64 @@ def render(issue, items, token="preview"):
     theme = (issue.get("selection_notes") or "").split("\nFLAG:")[0].strip()
     base, unsub, view = config.PUBLIC_URL, unsub_url(token), f"{config.PUBLIC_URL}/archive/{issue['week']}"
     F = "Georgia,'Times New Roman',serif"; S = "-apple-system,'Segoe UI',Helvetica,Arial,sans-serif"
+    GOLD, GOLD2, INK, MUT = "#b8862b", "#8a5f12", "#1a1814", "#7a7366"
 
-    toc = "".join(f'<tr><td style="padding:5px 0;font:600 14px {S};color:#b45309;width:26px;vertical-align:top" class="lk">{i["position"]}</td>'
-                  f'<td style="padding:5px 0;font:15px/1.4 {F};vertical-align:top" class="ink">{h(_clip(i["title"], 105))}</td></tr>' for i in items)
+    toc = "".join(f'<tr><td style="padding:7px 0;font:700 13px {S};color:{GOLD2};width:34px;vertical-align:top;letter-spacing:.04em" class="lk">{i["position"]:02d}</td>'
+                  f'<td style="padding:7px 0;font:16px/1.4 {F};vertical-align:top;color:{INK}" class="ink">{h(_clip(i["title"], 105))}</td></tr>' for i in items)
     stories = []
     for n, it in enumerate(items, 1):
         acc_ = it.get("access")
         walled = acc_ in ("soft", "hard", "dead")
         if walled and it.get("alt_url"):
-            alt = (f'<div style="margin-top:6px;font:13px {S}" class="mut">🔒 {h(it["source"])} may ask for a subscription. '
-                   f'<a href="{h(it["alt_url"])}" style="color:#b45309;font-weight:600" class="lk">Read the free coverage from {h(it["alt_source"])} →</a></div>')
+            alt = (f'<div style="margin-top:8px;font:13px/1.5 {S};color:{MUT}" class="mut">🔒 {h(it["source"])} may ask for a subscription. '
+                   f'<a href="{h(it["alt_url"])}" style="color:{GOLD2};font-weight:600" class="lk">Read the free coverage from {h(it["alt_source"])} →</a></div>')
         elif acc_ == "hard":
-            alt = f'<div style="margin-top:6px;font:13px {S}" class="mut">🔒 Subscription needed: this story sits behind {h(it["source"])}’s paywall. The take above stands on its own.</div>'
+            alt = f'<div style="margin-top:8px;font:13px/1.5 {S};color:{MUT}" class="mut">🔒 Subscription needed: this story sits behind {h(it["source"])}’s paywall. The take above stands on its own.</div>'
         elif walled:
-            alt = f'<div style="margin-top:6px;font:13px {S}" class="mut">🔒 May be limited to subscribers. The take above stands on its own.</div>'
+            alt = f'<div style="margin-top:8px;font:13px/1.5 {S};color:{MUT}" class="mut">🔒 May be limited to subscribers. The take above stands on its own.</div>'
         else:
             alt = ""
         stories.append(
-            f'<tr><td style="padding:30px 0 6px;border-top:1px solid #e8e2d4" class="rule">'
-            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="font:700 13px {S};letter-spacing:.08em;text-transform:uppercase;color:#b45309" class="lk">'
-            f'{n:02d} &nbsp;·&nbsp; {h(it["topic"] or "")}</td></tr>'
-            f'<tr><td style="padding:8px 0 14px"><a href="{h(it["url"])}" style="text-decoration:none;color:#1c1917;font:700 26px/1.25 {F}" class="hd ink">{h(_clip(it["title"], 150))}</a></td></tr>'
-            f'<tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td class="takebox" style="background:#fbf6ea;border-left:4px solid #f59e0b;border-radius:0 10px 10px 0;padding:16px 18px">'
-            f'<div style="font:700 11px {S};letter-spacing:.1em;text-transform:uppercase;color:#92400e;margin-bottom:6px" class="lk">Shreya’s take</div>'
-            f'<div style="font:19px/1.6 {F};color:#292524" class="take ink">{h(it["commentary"] or "")}</div></td></tr></table></td></tr>'
-            f'<tr><td style="padding:12px 0 0;font:14px {S};color:#78716c" class="mut">{h(it["source"])} &nbsp;·&nbsp; '
-            f'<a href="{h(it["url"])}" style="color:#b45309;font-weight:600;text-decoration:none" class="lk">Read the full story →</a>{alt}</td></tr></table></td></tr>')
+            f'<tr><td class="pad rule" style="padding:34px 44px 6px;border-top:1px solid #ece5d4">'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+            f'<td width="58" valign="top" class="num lk" style="font:400 40px/1 {F};color:{GOLD};width:58px">{n:02d}</td>'
+            f'<td valign="top" style="padding-top:6px"><span class="pill" style="display:inline-block;padding:4px 12px;border:1px solid #dccfae;border-radius:999px;font:700 10.5px {S};letter-spacing:.12em;text-transform:uppercase;color:{GOLD2}">{h(it["topic"] or "")}</span></td></tr></table>'
+            f'<div style="padding:14px 0 16px"><a href="{h(it["url"])}" style="text-decoration:none;color:{INK};font:700 26px/1.25 {F};letter-spacing:-.01em" class="hd ink">{h(_clip(it["title"], 150))}</a></div>'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td class="takebox" style="background:#faf5e8;border-radius:12px;padding:18px 22px 20px">'
+            f'<div style="font:700 10.5px {S};letter-spacing:.16em;text-transform:uppercase;color:{GOLD2};margin-bottom:10px" class="lk"><span style="display:inline-block;width:22px;height:2px;background:{GOLD};vertical-align:middle;margin-right:8px"></span>Shreya’s take</div>'
+            f'<div style="font:19px/1.65 {F};color:#2b2823" class="take ink">{h(it["commentary"] or "")}</div></td></tr></table>'
+            f'<div style="padding:14px 0 0;font:14px/1.5 {S};color:{MUT}" class="mut">{h(it["source"])} &nbsp;·&nbsp; '
+            f'<a href="{h(it["url"])}" style="color:{GOLD2};font-weight:700;text-decoration:none" class="lk">Read the full story →</a>{alt}</div></td></tr>')
 
-    shares = "".join(f'<a href="{h(u)}" class="btn" style="display:inline-block;margin:0 6px 8px 0;padding:10px 16px;border:1px solid #e2dccb;border-radius:999px;background:#fff;color:#1c1917;text-decoration:none;font:600 13px {S}">{h(k)}</a>'
+    shares = "".join(f'<a href="{h(u)}" class="btn" style="display:inline-block;margin:0 8px 8px 0;padding:10px 18px;border:1px solid #dccfae;border-radius:999px;background:#fffdf8;color:{INK};text-decoration:none;font:600 13px {S}">{h(k)}</a>'
                      for k, u in share_links().items())
     html = (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             f'<meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>{h(subject)}</title>{CSS}</head>'
-            f'<body class="bg" style="margin:0;padding:0;background:#f4f0e6"><span style="display:none;opacity:0;height:0;overflow:hidden;mso-hide:all">{h(pre)}</span>'
-            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="bg" style="background:#f4f0e6"><tr><td align="center" class="wrap" style="padding:28px 12px">'
-            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="card" style="max-width:640px;background:#ffffff;border-radius:16px;padding:40px 38px">'
-            # masthead
-            f'<tr><td align="center" style="padding-bottom:6px"><div class="mast ink" style="font:700 46px/1 {F};letter-spacing:-.02em;color:#1c1917">The Dispatch</div>'
-            f'<div class="mut" style="font:14px {S};color:#78716c;margin-top:10px">The Indian startup ecosystem, with commentary</div>'
-            f'<div class="mut" style="font:600 12px {S};letter-spacing:.08em;text-transform:uppercase;color:#a8a29e;margin-top:14px">{h(date)} &nbsp;·&nbsp; {len(items)} stories &nbsp;·&nbsp; {mins} min read</div></td></tr>'
-            + (f'<tr><td align="center" style="padding:22px 8px 6px"><div class="ink" style="font:italic 19px/1.55 {F};color:#44403c">{h(theme)}</div></td></tr>' if theme else "")
+            f'<body class="bg" style="margin:0;padding:0;background:#ece7da"><span style="display:none;opacity:0;height:0;overflow:hidden;mso-hide:all">{h(pre)}</span>'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="bg" style="background:#ece7da"><tr><td align="center" class="wrap" style="padding:30px 12px">'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="card" style="max-width:660px;background:#fffdf8;border-radius:18px;overflow:hidden">'
+            # masthead band
+            f'<tr><td align="center" class="head pad" style="background:#14120f;padding:46px 36px 40px">'
+            f'<div style="font:700 11px {S};letter-spacing:.32em;text-transform:uppercase;color:#d4a94a">Weekly &nbsp;·&nbsp; Thursday edition</div>'
+            f'<div class="mast" style="font:700 50px/1.05 {F};letter-spacing:-.02em;color:#f6f0e1;margin-top:16px">The Dispatch</div>'
+            f'<div style="width:44px;height:2px;background:#d4a94a;margin:20px auto 18px;line-height:2px;font-size:2px">&nbsp;</div>'
+            f'<div style="font:italic 16px/1.5 {F};color:#cfc6b2">The Indian startup ecosystem, with commentary</div>'
+            f'<div style="font:600 12px {S};letter-spacing:.1em;text-transform:uppercase;color:#8f8776;margin-top:18px">{h(date)} &nbsp;·&nbsp; {len(items)} stories &nbsp;·&nbsp; {mins} min read</div></td></tr>'
+            + (f'<tr><td class="pad" style="padding:34px 44px 4px"><div class="edit" style="background:#fbf7ec;border-radius:12px;padding:20px 24px;font:italic 19px/1.6 {F};color:#3d3830"><span class="ink">{h(theme)}</span></div></td></tr>' if theme else "")
             # in this issue
-            + f'<tr><td style="padding:26px 0 8px"><div style="font:700 11px {S};letter-spacing:.1em;text-transform:uppercase;color:#a8a29e;margin-bottom:6px" class="mut">In this issue</div>'
+            + f'<tr><td class="pad" style="padding:30px 44px 26px"><div style="font:700 10.5px {S};letter-spacing:.2em;text-transform:uppercase;color:{GOLD2};margin-bottom:8px" class="lk">In this issue</div>'
             f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0">{toc}</table></td></tr>'
             + "".join(stories)
             # sign-off + share
-            + f'<tr><td style="padding:30px 0 10px;border-top:1px solid #e8e2d4" class="rule"><div class="ink" style="font:italic 20px {F};color:#292524">That’s the week. See you Thursday.</div>'
-            f'<div class="ink" style="font:600 16px {S};margin-top:8px;color:#1c1917">— Shreya</div></td></tr>'
-            f'<tr><td style="padding:22px 0 8px"><div class="ink" style="font:700 16px {F};color:#1c1917;margin-bottom:4px">Know someone who’d like this?</div>'
-            f'<div class="mut" style="font:14px/1.5 {S};color:#78716c;margin-bottom:14px">Forward this email, or share it. They can subscribe in one step.</div>{shares}</td></tr>'
+            + f'<tr><td class="pad" style="padding:38px 44px 10px;border-top:1px solid #ece5d4"><div class="ink" style="font:italic 22px/1.4 {F};color:#2b2823">That’s the week. See you Thursday.</div>'
+            f'<div class="ink" style="font:700 17px {F};margin-top:10px;color:{INK}">Shreya</div></td></tr>'
+            f'<tr><td class="pad" style="padding:22px 44px 34px"><div class="ink" style="font:700 17px {F};color:{INK};margin-bottom:4px">Know someone who’d like this?</div>'
+            f'<div class="mut" style="font:14px/1.5 {S};color:{MUT};margin-bottom:14px">Forward this email, or share it. They can subscribe in one step.</div>{shares}</td></tr>'
             # footer
-            f'<tr><td style="padding:22px 0 0;border-top:1px solid #e8e2d4;font:12.5px/1.7 {S};color:#a8a29e" class="rule mut">'
-            f'<a href="{h(view)}" style="color:#78716c" class="mut">View in browser</a> &nbsp;·&nbsp; '
-            f'<a href="{h(base)}" style="color:#78716c" class="mut">Subscribe</a> (got this forwarded?) &nbsp;·&nbsp; '
-            f'<a href="{h(unsub)}" style="color:#78716c" class="mut">Unsubscribe</a><br>'
+            f'<tr><td class="foot pad" style="background:#f3eee1;padding:26px 44px 30px;font:12.5px/1.75 {S};color:{MUT}">'
+            f'<a href="{h(view)}" style="color:#5e584c;font-weight:600" class="mut">View in browser</a> &nbsp;·&nbsp; '
+            f'<a href="{h(base)}" style="color:#5e584c;font-weight:600" class="mut">Subscribe</a> (got this forwarded?) &nbsp;·&nbsp; '
+            f'<a href="{h(unsub)}" style="color:#5e584c;font-weight:600" class="mut">Unsubscribe</a><br>'
             f'You’re receiving The Dispatch because you subscribed at {h(config.PUBLIC_URL.replace("https://", ""))}. One click above ends it, no questions asked.</td></tr>'
             f'</table></td></tr></table></body></html>')
 

@@ -4,7 +4,7 @@ Everything that could alter Shreya's draft or send mail is preview-only here: th
 PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The Dispatch · Command Center</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
-<script>try{var t=localStorage.getItem('dispatch-theme')}catch(e){}document.documentElement.dataset.theme=t||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark')</script>
+<script>try{var t=localStorage.getItem('dispatch-theme-v2')}catch(e){}document.documentElement.dataset.theme=t||'light'</script>
 <style>
 :root{--bg:#0B0C0E;--ink:#ECECEE;--mut:#8B8F98;--card:rgba(255,255,255,.035);--card2:rgba(255,255,255,.06);--line:#1F2937;--soft:rgba(255,255,255,.055);
 --acc:#F59E0B;--acc-soft:rgba(245,158,11,.14);--ok:#10B981;--ok-soft:rgba(16,185,129,.14);--bad:#EF4444;--bad-soft:rgba(239,68,68,.15);--info:#60A5FA;--info-soft:rgba(96,165,250,.14);
@@ -114,8 +114,50 @@ textarea.ta{width:100%;min-height:90px;resize:vertical;font-family:var(--mono);f
 .fnode{border:1px solid var(--line);background:var(--card2);border-radius:12px;padding:10px 12px;cursor:crosshair;user-select:none;font-size:12.5px;line-height:1.4;position:relative;z-index:2}.fnode b{font:600 11px var(--mono);color:var(--acc);display:block;margin-bottom:3px}
 .fnode:hover,.fnode.on{border-color:var(--acc);background:var(--acc-soft)}.fzsvg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}
 .flag{margin-top:8px;font:12px var(--mono);padding:7px 10px;border-radius:8px;background:var(--acc-soft);color:var(--acc)}
+
+/* ---- Premium editorial theme (overrides the tokens above) ---- */
+:root{--bg:#0F0E0C;--ink:#F3EEE2;--mut:#A39B8A;--card:#181612;--card2:#201D17;--line:#2D2921;--soft:rgba(243,238,226,.06);
+--acc:#D4A94A;--acc-soft:rgba(212,169,74,.14);--ok:#3FB68B;--ok-soft:rgba(63,182,139,.14);--bad:#E5675B;--bad-soft:rgba(229,103,91,.15);--info:#7FB0E8;--info-soft:rgba(127,176,232,.14);
+--shadow:0 1px 0 rgba(255,255,255,.03) inset,0 18px 40px -22px rgba(0,0,0,.7)}
+[data-theme=light]{--bg:#F5F1E7;--ink:#1A1814;--mut:#6B6458;--card:#FFFDF8;--card2:#FFFFFF;--line:#E6DECB;--soft:rgba(26,24,20,.05);
+--acc:#A9791F;--acc-soft:rgba(184,134,43,.13);--ok:#1E8C64;--ok-soft:rgba(30,140,100,.11);--bad:#C4443A;--bad-soft:rgba(196,68,58,.1);--info:#2F6DB5;--info-soft:rgba(47,109,181,.1);
+--shadow:0 1px 2px rgba(26,24,20,.05),0 18px 36px -20px rgba(60,44,10,.22)}
+body{font-size:15.5px;line-height:1.6;background-image:none}
+[data-theme=light] body{background-image:radial-gradient(1000px 420px at 80% -8%,rgba(184,134,43,.10),transparent 62%)}
+header{background:#14120F;border-bottom:0;color:#F6F0E1;backdrop-filter:none}
+header .brand{font-size:27px;color:#F6F0E1}header .brand small{font:600 10.5px var(--sans);letter-spacing:.2em;color:#D4A94A}
+header .pill{background:rgba(255,255,255,.08);color:#D8CFBB}header .pill.ok{background:rgba(63,182,139,.18);color:#6FD3AC}header .pill.warn{background:rgba(212,169,74,.2);color:#E4BE63}
+header .act,header .ibtn{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.14);color:#F6F0E1}
+.bar{padding:16px 24px}
+.banner{padding:0 24px 14px}.bn{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12);color:#F6F0E1;border-radius:12px}.bn small{color:#B9B09C}
+.bn.green{background:rgba(63,182,139,.14);border-color:rgba(63,182,139,.45)}.bn.amber{background:rgba(212,169,74,.15);border-color:rgba(212,169,74,.5)}.bn.red{background:rgba(229,103,91,.16)}
+nav{padding:0 24px;gap:6px}nav button{color:#A99F8B;font:600 14px var(--sans);padding:12px 16px;border-bottom:3px solid transparent}
+nav button:hover{color:#F6F0E1}nav button.on{color:#FFFFFF;border-color:#D4A94A}nav button .n{background:rgba(255,255,255,.1);color:#D8CFBB;font:600 11px var(--sans)}
+main{padding:30px 24px 100px}
+.card{border-radius:18px;padding:26px;box-shadow:var(--shadow);backdrop-filter:none}
+h2{font:600 24px/1.25 var(--serif);margin-bottom:6px}.sub{font-size:14px;line-height:1.55;margin-bottom:20px}
+h3,.rc h4{font:700 11.5px var(--sans);letter-spacing:.14em}
+.pill,.chip,th,.kpi .d,.ap .k,.ap .t,.guard,.why-d,.rc .why,.note,.sl .lab,.pg,.pft,.feed .r,.fnode b,.flag{font-family:var(--sans)}
+.pill{font-weight:600;font-size:12px;padding:4px 12px}.chip{font-weight:600;font-size:11.5px;padding:3px 10px}
+.kpi .v{font-size:40px;letter-spacing:-.02em}.kpi .l{font-size:14px;font-weight:600;margin-top:6px}.kpi .d{font-size:12.5px}
+.act{font:600 14px var(--sans);padding:10px 16px;border-radius:11px;box-shadow:0 1px 2px rgba(0,0,0,.06)}.act.sm{font-size:12.5px;padding:7px 12px}
+.act.pri{background:#14120F;color:#F6F0E1;border-color:#14120F}[data-theme=dark] .act.pri,:root:not([data-theme=light]) .act.pri{background:var(--acc);color:#1a1100;border-color:var(--acc)}
+.ap{opacity:.7;border-radius:14px;padding:16px 18px}.ap .k{font-size:11.5px;letter-spacing:.1em;font-weight:700}.ap .t{font-size:13px;font-weight:600;color:var(--ink)}.ap .nt{font-size:13px}
+.step .t{font-size:13.5px}.step .d{font-size:12px}
+.fun .bar{background:linear-gradient(90deg,#B8862B,#D9B45E);color:#2a1d00;height:34px;border-radius:10px;font:700 14px var(--sans)}.fun .lab{font-size:14px}.fun .lab small{font:12.5px var(--sans)}
+.fun .drop{font:600 12px var(--sans)}
+.hero{position:relative;overflow:hidden;border-radius:22px;padding:34px 36px;background:linear-gradient(135deg,#14120F,#2a2216);color:#F6F0E1;box-shadow:var(--shadow);border:1px solid rgba(212,169,74,.28)}
+.hero::after{content:"";position:absolute;right:-60px;top:-80px;width:280px;height:280px;border-radius:50%;background:radial-gradient(circle,rgba(212,169,74,.28),transparent 70%)}
+.hero .eyebrow{font:700 11px var(--sans);letter-spacing:.24em;text-transform:uppercase;color:#D4A94A}
+.hero h1{font:600 34px/1.2 var(--serif);margin:10px 0 10px;max-width:760px;letter-spacing:-.01em}.hero p{margin:0;color:#CFC6B2;max-width:720px;font-size:16px;line-height:1.6}
+.hero .stats{display:flex;gap:34px;flex-wrap:wrap;margin-top:26px;position:relative;z-index:1}.hero .stats b{display:block;font:600 36px var(--serif);color:#fff}.hero .stats span{font:600 12.5px var(--sans);color:#B9B09C}
+.how{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:16px}@media(max-width:900px){.how{grid-template-columns:1fr 1fr}.hero{padding:26px 22px}.hero h1{font-size:27px}}
+.how div{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 18px 16px;box-shadow:var(--shadow)}.how i{font:600 28px var(--serif);font-style:normal;color:var(--acc)}.how b{display:block;font-size:15px;margin:4px 0 3px}.how span{font-size:13px;color:var(--mut);line-height:1.5}
+.rc{border-radius:18px;box-shadow:var(--shadow)}.rc .cm{font-size:18px}
+table{font-size:14px}th{font-size:11.5px;letter-spacing:.1em}
+.pbox{border-radius:18px}
 </style></head><body>
-<header><div class="bar"><div class="brand">The Dispatch<small>command center</small></div><span class="sp"></span><span class="pill" id="wk"></span><span class="pill" id="st"></span><button class="act sm" id="kbtn" style="font-family:var(--mono)" title="Command palette">⌘K</button><button class="ibtn" id="theme" title="Light / dark">◐</button></div>
+<header><div class="bar"><div class="brand">The Dispatch<small>Shreya’s editorial desk</small></div><span class="sp"></span><span class="pill" id="wk"></span><span class="pill" id="st"></span><button class="act sm" id="kbtn" style="font-family:var(--mono)" title="Command palette">⌘K</button><button class="ibtn" id="theme" title="Light / dark">◐</button></div>
 <div class="banner" id="banner"></div><nav id="tabs"></nav></header>
 <main id="main"><div class="empty">Loading…</div></main>
 <div class="scrim" id="scrim"></div><aside class="dr" id="drawer"></aside>
@@ -123,7 +165,7 @@ textarea.ta{width:100%;min-height:90px;resize:vertical;font-family:var(--mono);f
 <script>
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let S=null,fetchedAt=Date.now(),tab=(location.hash||'#command').slice(1),F={q:'',status:'all',source:'all',limit:60,sort:'time',filter:'',topic:''},fz=null,fzDrag=null,pal={open:false,q:'',sel:0,items:[]},ed={text:'',item:''},sim=null,gSel=null,pvDev='desktop',pvDark=false,socTab='x',rv={},ru={},openDrawer=false;
-const TABS=[['command','Command'],['curation','Curation'],['intelligence','Intelligence'],['telegram','Telegram lab'],['delivery','Delivery'],['subscribers','Subscribers'],['articles','Articles'],['sources','Sources']];
+const TABS=[['command','Overview'],['curation','Review the draft'],['intelligence','Insights'],['telegram','Telegram'],['delivery','Email &amp; send'],['subscribers','Subscribers'],['articles','All articles'],['sources','Sources']];
 const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const when=iso=>{if(!iso)return '—';const d=new Date(iso.length<=16?iso+':00':iso);return isNaN(d)?iso:DAYS[d.getDay()]+' '+d.toLocaleTimeString('en-IN',{hour:'numeric',minute:'2-digit',hour12:true})+' · '+d.getDate()+' '+d.toLocaleString('en-IN',{month:'short'})};
 const short=iso=>iso?iso.replace('T',' ').slice(5,16):'—';
@@ -185,7 +227,13 @@ function command(){
   const ap=S.approval.map(a=>`<div class="ap c-${colors[a.key]} ${a.state}"><div class="k">${icon[a.key]} ${esc(a.label)}</div><div class="t">${a.ts?esc(short(a.ts)):(a.state==='skipped'?'skipped':'pending')}</div><div class="nt">${esc(a.note)}</div></div>`).join('');
   const picked=sel().filter(i=>i.signal!=null),rest=S.articles.filter(a=>a.signal!=null&&a.status==='new');
   const avg=picked.length?Math.round(picked.reduce((a,b)=>a+b.signal,0)/picked.length):null,avr=rest.length?Math.round(rest.reduce((a,b)=>a+b.signal,0)/rest.length):'—';
-  return `<div class="card"><h2>Approval status</h2><p class="sub">The Wednesday evening pipeline, live from the database.</p><div class="appr">${ap}</div></div>
+  const st=S.issue?S.issue.status:'collecting',HD={collecting:['Collecting this week’s stories','The pipeline reads 20 news feeds and several news APIs every Monday to Wednesday. On Wednesday afternoon Gemini picks the ten best and drafts your take on each.'],
+   drafted:['Your draft is ready. Review it in Telegram.','Ten stories, each with a take in your voice. Keep, swap or edit any of them, then confirm. Nothing goes to subscribers until you do.'],
+   approved:['You’ve confirmed this issue.','It goes to your subscribers on Thursday at 8:00 AM IST. You can still reopen it in Telegram until then.'],
+   sending:['Sending now.','The issue is going out to your subscribers.'],sent:['This issue has gone out.','Delivered to your active subscribers. Next week’s collection starts Monday.']}[S.issue?S.issue.status:'collecting']||['This week’s issue',''];
+  const hero=`<div class="hero"><div class="eyebrow">Week of ${esc(S.week)}</div><h1>${HD[0]}</h1><p>${HD[1]}</p><div class="stats"><div><b>${k.articles_week}</b><span>articles read this week</span></div><div><b>${k.selected}</b><span>stories in the draft</span></div><div><b>${k.duplicates}</b><span>repeats filtered out</span></div><div><b>${k.subscribers}</b><span>active subscribers</span></div></div></div>
+  <div class="how"><div><i>1</i><b>Collect</b><span>Mon to Wed: news feeds and APIs, no repeats.</span></div><div><i>2</i><b>Pick &amp; write</b><span>Wed: Gemini chooses 10 stories and drafts your take.</span></div><div><i>3</i><b>You confirm</b><span>In Telegram. Nothing is sent without your yes.</span></div><div><i>4</i><b>Send</b><span>Thursday 8 AM IST to your subscribers.</span></div></div><div style="height:18px"></div>`;
+  return hero+`<div class="card"><h2>Approval status</h2><p class="sub">The Wednesday evening pipeline, live from the database.</p><div class="appr">${ap}</div></div>
   <div class="card" style="margin-top:16px"><h2>The ${S.funnel[0].n}-to-${S.kpis.selected} signal funnel</h2><p class="sub">Every article the pipeline saw this week, and how it narrowed to the issue. The Articles tab shows the reason each one was dropped.</p>${funnel()}</div>
   <div class="card" style="margin-top:16px"><h2>This week’s pipeline</h2><p class="sub">Monday to Wednesday collection, Wednesday selection, your confirmation, Thursday delivery.</p><div class="steps">${steps}</div></div>
   <div class="grid g6">${kpi(k.articles_week,'articles ingested','')}${kpi(k.duplicates,'duplicates caught',S.memory.dup_in_week+' in-week · '+S.memory.dup_past+' vs past issues')}${kpi(k.sources_ok+'/'+k.sources_total,'sources live','RSS · Google News · 3 APIs')}
@@ -395,7 +443,7 @@ const flash=(m,id)=>{const n=$(id||'#note');if(n){n.className='note show';n.text
 document.addEventListener('click',async e=>{
   const g=s=>e.target.closest(s);let b;
   if(b=g('[data-t]')){tab=b.dataset.t;location.hash=tab;render();return}
-  if(g('#theme')){const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('dispatch-theme',t)}catch(x){}return}
+  if(g('#theme')){const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('dispatch-theme-v2',t)}catch(x){}return}
   if(e.target.id==='more'){F.limit+=100;render();return}
   if(b=g('[data-run]')){const old=b.textContent;b.disabled=true;b.textContent='Working…';const id=b.closest('#banner')?'#bnote':'#note';flash('Running. Selection can take up to a minute.',id);
     try{const j=await post('/api/admin/run/'+b.dataset.run);flash((j.ok?'✓ ':'✗ ')+(j.message||j.detail||'done'),id)}catch(x){flash('✗ '+x,id)}b.disabled=false;b.textContent=old;await silent();return}
