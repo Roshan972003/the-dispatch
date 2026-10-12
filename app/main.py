@@ -99,3 +99,16 @@ async def resend_webhook(request: Request):
         raise HTTPException(403)
     import json
     return mailer.handle_webhook(json.loads(body))
+
+
+@app.get("/archive/{week}", response_class=HTMLResponse)
+def archive(week: str):
+    """Public web version of an edition. Only editions that were actually emailed are shown."""
+    from app import mailer
+    with db.conn() as c:
+        issue = db.one(c, "SELECT * FROM issues WHERE week=? AND status='sent'", (week,))
+        items = db.all(c, """SELECT i.position, i.topic, i.commentary, i.access, i.alt_url, i.alt_source, a.title, a.url, a.source FROM issue_items i JOIN articles a ON a.id=i.article_id
+                             WHERE i.issue_id=? AND i.kind='selected' ORDER BY i.position""", (issue["id"],)) if issue else []
+    if not issue:
+        raise HTTPException(404)
+    return HTMLResponse(mailer.render(issue, items)[1])

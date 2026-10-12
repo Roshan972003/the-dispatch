@@ -9,10 +9,14 @@ class LLMUnavailable(Exception):
 URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 def generate(system, prompt, schema=None, temperature=0.4):
+    return generate_parts(system, [{"text": prompt}], schema, temperature)
+
+def generate_parts(system, parts, schema=None, temperature=0.4):
+    """parts: [{"text": ...}] or with audio [{"inline_data": {"mime_type": "audio/ogg", "data": <base64>}}, {"text": ...}]."""
     if not config.GEMINI_API_KEY:
         raise LLMUnavailable("GEMINI_API_KEY is not set")
     body = {"systemInstruction": {"parts": [{"text": system}]},
-            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "contents": [{"role": "user", "parts": parts}],
             "generationConfig": {"temperature": temperature}}
     if schema:
         body["generationConfig"]["responseMimeType"] = "application/json"

@@ -47,7 +47,7 @@ def _q_issue(week):
     with db.conn() as c:
         issue = db.one(c, "SELECT * FROM issues WHERE week=?", (week,))
         items = db.all(c, """SELECT i.id, i.position, i.kind, i.topic, i.selection_filter, i.commentary, i.draft_original, i.flags, i.reviewed, i.edited, i.why,
-                             a.title, a.url, a.source, a.snippet, a.signal, a.signal_filter FROM issue_items i JOIN articles a ON a.id=i.article_id
+                             i.counter, i.access, i.alt_url, i.alt_source, i.entities, a.title, a.url, a.source, a.snippet, a.signal, a.signal_filter FROM issue_items i JOIN articles a ON a.id=i.article_id
                              WHERE i.issue_id=? AND i.kind IN ('selected','backup') ORDER BY i.kind DESC, i.position""", (issue["id"],)) if issue else []
         lc = db.kv_get(c, f"linkcheck:{issue['id']}") if issue else None
     return issue, items, (json.loads(lc) if lc else None)
@@ -201,6 +201,12 @@ def state(fresh=False):
         topics[i["topic"]] = topics.get(i["topic"], 0) + 1
     from app.select_stories import voice_checks
     for i in items:
+        for k in ("counter", "entities"):
+            try:
+                i[k] = json.loads(i.get(k) or "[]")
+            except Exception:
+                i[k] = []
+    for i in items:
         i["checks"] = voice_checks(i["commentary"] or "", i["title"], i["snippet"] or "", sg["banned"]) if i["kind"] == "selected" else []
     # archive matrix: topic x week, plus entity overlap between this week's picks and the previous four issues
     weeks = sorted({m["week"] for m in mem}, reverse=True)
@@ -219,7 +225,18 @@ def state(fresh=False):
         hit = sorted(e for e in ents_of(m) if e in ent_weeks)
         if hit:
             overlaps.append({"title": m["title"], "entities": hit, "weeks": sorted({w for e in hit for w in ent_weeks[e]})})
-    memory = {"weeks": weeks, "topics": [t for t in select_stories_topics() if t in matrix], "matrix": matrix, "overlaps": overlaps,
+    past_by_ent = {}
+    for m in sorted((m for m in mem if m["week"] != week), key=lambda m: m["week"]):
+        for e in ents_of(m):
+            past_by_ent[e] = m            # most recent earlier edition wins
+    backlinks = []
+    for m in cur:
+        hit = [e for e in ents_of(m) if e in past_by_ent]
+        if hit:
+            pm = past_by_ent[hit[0]]
+            backlinks.append({"title": m["title"], "entity": hit[0], "week": pm["week"], "past_title": pm["title"], "url": pm["url"],
+                              "text": f"We covered {hit[0]} in the {pm['week']} edition: \u201c{pm['title'][:90]}\u201d. Worth a line on how this new development ties back."})
+    memory = {"backlinks": backlinks, "weeks": weeks, "topics": [t for t in select_stories_topics() if t in matrix], "matrix": matrix, "overlaps": overlaps,
               "stories": [{"week": m["week"], "topic": m["topic"], "title": m["title"], "url": m["url"]} for m in mem],
               "dup_in_week": dup_in_week, "dup_past": dup_past}
     topic_counts = dict(topics)
@@ -258,7 +275,8 @@ def state(fresh=False):
             cl["size"] = len(cl["article_ids"]); cl["cross"] = len(cl["sectors"]) > 1
     data = {
         "now": now.isoformat(timespec="minutes"), "week": week, "mode": "postgres" if db.PG else "sqlite", "public_url": config.PUBLIC_URL,
-        "issue": ({k: issue[k] for k in ("id", "week", "status", "approved_at", "sent_at", "drafted_at", "selection_notes")} if issue else None),
+        "issue": ({**{k: issue[k] for k in ("id", "week", "status", "approved_at", "sent_at", "drafted_at", "selection_notes", "subject", "preheader")},
+                  "subject_options": json.loads(issue.get("subject_options") or "[]"), "fusions": json.loads(issue.get("fusions") or "[]")} if issue else None),
         "stages": stages, "next_runs": _next_runs(now),
         "kpis": {"articles_week": sum(counts.values()), "articles_total": total_articles, "candidates": counts.get("new", 0) + counts.get("selected", 0),
                  "duplicates": counts.get("dup", 0), "sources_ok": ing["sources_ok"] if ing else 0, "sources_total": ing["sources_total"] if ing else 0,

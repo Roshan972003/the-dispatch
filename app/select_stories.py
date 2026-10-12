@@ -10,7 +10,7 @@ TOPICS = ["Funding & Deals", "Policy & Regulation", "AI & Deep Tech", "Fintech",
 FILTERS = ["COUNTERINTUITIVE", "UNDER-REPORTED", "TREND-CONNECTING"]
 
 def candidates(c, week, limit=90):
-    rows = db.all(c, "SELECT id, source, title, snippet, published_at FROM articles WHERE week=? AND status='new' ORDER BY published_at DESC", (week,))
+    rows = db.all(c, "SELECT id, source, title, snippet, url, published_at FROM articles WHERE week=? AND status='new' ORDER BY published_at DESC", (week,))
     per, out = {}, []
     for r in rows:                      # cap per source so one prolific feed cannot crowd out the rest
         if per.get(r["source"], 0) < 12:
@@ -229,41 +229,107 @@ def _safe(fn, *a):
     except Exception:
         return None
 
+# ---------------- devil's advocate, trend fusion, subject lines, voice notes ----------------
+ANGLE_SCHEMA = {"type": "OBJECT", "properties": {
+    "stories": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {"id": {"type": "INTEGER"}, "counter": {"type": "ARRAY", "items": {"type": "STRING"}}}, "required": ["id", "counter"]}},
+    "fusions": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {"a": {"type": "INTEGER"}, "b": {"type": "INTEGER"}, "angle": {"type": "STRING"}}, "required": ["a", "b", "angle"]}}},
+    "required": ["stories", "fusions"]}
+
+def angles(stories):
+    """Per story: three counter-thesis prompts (what the press may be missing). Across stories: up to three trend fusions. Framed as things to check, never as facts."""
+    block = "\n".join(json.dumps({"id": s["id"], "pos": s["pos"], "title": s["title"], "snippet": (s.get("snippet") or "")[:240]}) for s in stories)
+    res = gemini.generate("You are a sceptical editor's research assistant for The Dispatch, a newsletter on Indian startups.",
+        "For EACH story give exactly 3 short counter-thesis bullets: what the mainstream press may be ignoring (hidden terms, regulatory fine print, unit economics, second-order effects). "
+        "Phrase each as something to CHECK or a question to ask, never as a fact. Do not invent numbers, names or clauses that are not in the text.\n"
+        "Then suggest up to 3 'fusions': pairs of stories (by 'pos') that connect into one trend nobody has stated, with a one-sentence angle Shreya could write.\n" + block, ANGLE_SCHEMA, 0.5)
+    by_id = {s["id"] for s in stories}
+    return {"counter": {x["id"]: x["counter"][:3] for x in res.get("stories", []) if x["id"] in by_id},
+            "fusions": [f for f in res.get("fusions", []) if f["a"] != f["b"]][:3]}
+
+SUBJ_SCHEMA = {"type": "OBJECT", "properties": {"options": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
+    "style": {"type": "STRING", "enum": ["CURIOSITY", "DATA", "PUNCHY"]}, "subject": {"type": "STRING"}, "preheader": {"type": "STRING"}}, "required": ["style", "subject", "preheader"]}}}, "required": ["options"]}
+
+def subject_lines(stories, banned):
+    block = "\n".join(f"{s['pos']}. {s['title']} [{s['topic']}]" for s in stories)
+    res = gemini.generate("You write email subject lines for Shreya's weekly newsletter on the Indian startup ecosystem. Dry, direct, a little sceptical. Never clickbait that the issue cannot back up.",
+        f"Write exactly 3 options, one each: CURIOSITY (an open loop the issue closes), DATA (a concrete number or mechanism taken from the stories), PUNCHY (a short list-style line naming 2-3 topics). "
+        f"Subject max 60 characters, preheader max 90. No emojis, no exclamation marks, none of: {', '.join(banned)}. Only use facts present in these headlines. If a headline gives a range or an approximate figure, keep it exactly as written (for example '20,000-30,000'); never round it up or pick one end. If unsure, leave the number out.\n{block}", SUBJ_SCHEMA, 0.8)
+    out = []
+    for o in res.get("options", [])[:3]:
+        if len(o["subject"]) <= 70 and "!" not in o["subject"] and not any(b.lower() in (o["subject"] + o["preheader"]).lower() for b in banned):
+            out.append({"style": o["style"], "subject": o["subject"].strip(), "preheader": o["preheader"].strip()[:100]})
+    return out
+
+VOICE_SCHEMA = {"type": "OBJECT", "properties": {"transcript": {"type": "STRING"}, "commentary": {"type": "STRING"}}, "required": ["transcript", "commentary"]}
+
+def voice_to_commentary(sg, story, audio, mime="audio/ogg", tuner=None):
+    """Shreya's voice note -> transcript + commentary in her voice. Her spoken opinions are hers to assert, so numbers she says are allowed; nothing else is invented."""
+    import base64
+    system = _system(sg) + tuner_text(tuner or get_tuner())
+    prompt = (f"Shreya recorded a voice note with her raw thoughts on this story.\nTitle: {story['title']}\nSource: {story['source']}\nSnippet: {story['snippet'] or '(none)'}\n\n"
+              "1) Transcribe the voice note faithfully. 2) Turn her point into the commentary in her voice: it must express HER take (claim, mechanism, closer), "
+              "using what she said. Do not add facts, numbers or names she did not say or that are not in the snippet. Return ONLY JSON: {\"transcript\": \"...\", \"commentary\": \"...\"}")
+    parts = [{"inline_data": {"mime_type": mime, "data": base64.b64encode(audio).decode()}}, {"text": prompt}]
+    out, errs = {"transcript": "", "commentary": ""}, []
+    for _ in range(2):
+        extra = [] if not errs else [{"text": "Failed: " + "; ".join(errs) + ". Rewrite the commentary."}]
+        out = gemini.generate_parts(system, parts + extra, VOICE_SCHEMA, 0.6)
+        errs = validate_commentary(out["commentary"].strip(), story["title"], (story["snippet"] or "") + " " + out["transcript"], sg["banned"])
+        if not errs:
+            break
+    return out["commentary"].strip(), out["transcript"].strip(), errs
+
 def run_selection(force=False):
+    from app import access
     week = config.week_start()
     with db.conn() as c:
         issue = db.one(c, "SELECT * FROM issues WHERE week=?", (week,))
         if issue and issue["status"] != "collecting" and not force:
             return {"week": week, "skipped": f"issue already {issue['status']}"}
         cands, recent, sg, tuner = candidates(c, week), recent_titles(c, week), styleguide.active(c), get_tuner(c)
+        pool_all = db.all(c, "SELECT title, url, source, fingerprint FROM articles WHERE week=?", (week,))
     if len(cands) < config.PICK_MAX:
         return {"week": week, "error": f"only {len(cands)} candidates"}
     res, flag = select(sg, cands, recent)
     by_id = {a["id"]: a for a in cands}
-    stories = [{**by_id[s["article_id"]], "selection_filter": s["selection_filter"], "topic": s["topic_area"], "why": s["reason"]} for s in res["selected"]]
-    with ThreadPoolExecutor(8) as ex:   # commentary, signal scores, trend clusters and entities are independent: run together
+    stories = [{**by_id[s["article_id"]], "selection_filter": s["selection_filter"], "topic": s["topic_area"], "why": s["reason"], "pos": n}
+               for n, s in enumerate(res["selected"], 1)]
+    backs = [{**by_id[b["article_id"]], "selection_filter": b["selection_filter"], "topic": b["topic_area"], "why": b["reason"]} for b in res["backups"] if b["article_id"] in by_id]
+    top3 = backs[:3]
+    with ThreadPoolExecutor(12) as ex:   # independent Gemini jobs and link checks run together
         fd = [ex.submit(draft_one, sg, s, tuner) for s in stories]
+        fb = [ex.submit(draft_one, sg, s, tuner) for s in top3]
         fs, ft, fe = ex.submit(_safe, score_pool, sg, cands), ex.submit(_safe, cluster_trends, cands), ex.submit(_safe, extract_entities, stories)
-        drafts = [f.result() for f in fd]
+        fa, fj = ex.submit(_safe, angles, stories), ex.submit(_safe, subject_lines, stories, sg["banned"])
+        fx = ex.submit(_safe, access.diagnose_all, stories + backs[:6], pool_all)
+        drafts, bdrafts = [f.result() for f in fd], [f.result() for f in fb]
         scores, trends, ents = fs.result() or {}, ft.result() or [], fe.result() or {}
+        ang, subjects, acc = fa.result() or {"counter": {}, "fusions": []}, fj.result() or [], fx.result() or {}
     notes = (res.get("week_theme") or "") + (f"\nFLAG: {flag}" if flag else "")
+    now = config.now_ist().isoformat(timespec="seconds")
     with db.conn() as c:
         if issue:
             db.run(c, "DELETE FROM issue_items WHERE issue_id=?", (issue["id"],)); iid = issue["id"]
             db.run(c, "UPDATE articles SET status='new' WHERE week=? AND status='selected'", (week,))
         else:
-            iid = db.insert(c, "INSERT INTO issues (week, status, created_at) VALUES (?,?,?)", (week, "collecting", config.now_ist().isoformat(timespec="seconds")))
-        for pos, (s, (text, errs)) in enumerate(zip(stories, drafts), 1):
-            db.run(c, """INSERT INTO issue_items (issue_id, article_id, position, kind, commentary, draft_original, topic, why, selection_filter, flags, entities)
-                         VALUES (?,?,?,?,?,?,?,?,?,?,?)""", (iid, s["id"], pos, "selected", text, text, s["topic"], s["why"], s["selection_filter"], "; ".join(errs), json.dumps(ents.get(s["id"], []))))
+            iid = db.insert(c, "INSERT INTO issues (week, status, created_at) VALUES (?,?,?)", (week, "collecting", now))
+        for s, (text, errs) in zip(stories, drafts):
+            a = acc.get(s["id"], {})
+            db.run(c, """INSERT INTO issue_items (issue_id, article_id, position, kind, commentary, draft_original, topic, why, selection_filter, flags, entities, counter, access, alt_url, alt_source)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (iid, s["id"], s["pos"], "selected", text, text, s["topic"], s["why"], s["selection_filter"], "; ".join(errs),
+                          json.dumps(ents.get(s["id"], [])), json.dumps(ang["counter"].get(s["id"], [])), a.get("access"), a.get("alt_url"), a.get("alt_source")))
             db.run(c, "UPDATE articles SET status='selected', topic=? WHERE id=?", (s["topic"], s["id"]))
-        for pos, b in enumerate(res["backups"], 1):
-            db.run(c, "INSERT INTO issue_items (issue_id, article_id, position, kind, topic, why, selection_filter) VALUES (?,?,?,?,?,?,?)",
-                   (iid, b["article_id"], pos, "backup", b["topic_area"], b["reason"], b["selection_filter"]))
+        for pos, b in enumerate(backs, 1):
+            text = bdrafts[pos - 1][0] if pos <= len(bdrafts) else None
+            a = acc.get(b["id"], {})
+            db.run(c, """INSERT INTO issue_items (issue_id, article_id, position, kind, commentary, draft_original, topic, why, selection_filter, access, alt_url, alt_source)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""", (iid, b["id"], pos, "backup", text, text, b["topic"], b["why"], b["selection_filter"], a.get("access"), a.get("alt_url"), a.get("alt_source")))
         db.many(c, "UPDATE articles SET signal=?, signal_filter=? WHERE id=?", [(v[0], v[1], k) for k, v in scores.items()])
         if trends:
             db.kv_set(c, f"trends:{week}", json.dumps({"week": week, "clusters": trends}))
-        db.run(c, "UPDATE issues SET status='drafted', drafted_at=?, selection_notes=? WHERE id=?", (config.now_ist().isoformat(timespec="seconds"), notes, iid))
+        db.run(c, "UPDATE issues SET status='drafted', approved_at=NULL, reminder_sent=0, drafted_at=?, selection_notes=?, subject_options=?, subject=?, preheader=?, fusions=? WHERE id=?",
+               (now, notes, json.dumps(subjects), subjects[0]["subject"] if subjects else None, subjects[0]["preheader"] if subjects else None, json.dumps(ang["fusions"]), iid))
         db.log(c, "select", f"issue {iid}: {len(stories)} picks, style v{sg['version']}, flag={flag}")
     return {"week": week, "issue_id": iid, "picks": len(stories), "topics": sorted({s["topic"] for s in stories}),
-            "style_version": sg["version"], "selection_flag": flag, "comment_flags": sum(1 for _, e in drafts if e), "scored": len(scores), "trend_clusters": len(trends)}
+            "style_version": sg["version"], "selection_flag": flag, "comment_flags": sum(1 for _, e in drafts if e), "scored": len(scores), "trend_clusters": len(trends),
+            "subjects": len(subjects), "access_checked": len(acc)}

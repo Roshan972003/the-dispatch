@@ -23,7 +23,8 @@ def unsub_url(token):
 
 def render(issue, items, token="preview"):
     date = send_date(issue["week"]).strftime("%-d %b %Y")
-    subject = f"The Dispatch · {date}"
+    subject = issue.get("subject") or f"The Dispatch · {date}"
+    pre = issue.get("preheader") or ""
     rows, text = [], [f"THE DISPATCH · {date}\nIndian startups, with commentary.\n"]
     for it in items:
         rows.append(
@@ -31,10 +32,12 @@ def render(issue, items, token="preview"):
             f'<div style="font:600 11px/1 Helvetica,Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#a16207">{h(it["topic"] or "")}</div>'
             f'<a href="{h(it["url"])}" style="display:block;margin:8px 0 8px;font:700 19px/1.3 Georgia,serif;color:#1c1917;text-decoration:none">{h(it["title"])}</a>'
             f'<div style="font:15px/1.6 Georgia,serif;color:#292524">{h(it["commentary"] or "")}</div>'
-            f'<div style="margin-top:8px;font:12px Helvetica,Arial,sans-serif;color:#78716c">{h(it["source"])} · <a href="{h(it["url"])}" style="color:#78716c">Read the story</a></div></td></tr>')
+            f'<div style="margin-top:8px;font:12px Helvetica,Arial,sans-serif;color:#78716c">{h(it["source"])} · <a href="{h(it["url"])}" style="color:#78716c">Read the story</a>'
+            + (f' · behind a paywall? <a href="{h(it["alt_url"])}" style="color:#a16207">Free coverage from {h(it["alt_source"])}</a>' if it.get("alt_url") and it.get("access") in ("soft", "hard", "dead") else '')
+            + '</div></td></tr>')
         text.append(f'{it["position"]}. {it["title"]} ({it["source"]})\n{it["commentary"]}\n{it["url"]}\n')
     u = unsub_url(token)
-    html = (f'<!doctype html><html><body style="margin:0;background:#f5f5f4"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">'
+    html = (f'<!doctype html><html><body style="margin:0;background:#f5f5f4"><span style="display:none;opacity:0;height:0;overflow:hidden">{h(pre)}</span><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">'
             f'<table role="presentation" width="100%" style="max-width:600px;background:#ffffff;padding:8px 28px 24px">'
             f'<tr><td style="padding:24px 0 6px"><div style="font:700 28px Georgia,serif;color:#1c1917">The Dispatch</div>'
             f'<div style="font:13px Helvetica,Arial,sans-serif;color:#78716c;margin-top:4px">{h(date)} · The Indian startup ecosystem, with commentary</div></td></tr>'
@@ -60,7 +63,7 @@ def send_issue(issue_id, budget_s=50):
         if not issue or issue["status"] not in ("approved", "sending") or not issue["approved_at"]:
             return {"refused": "issue is not confirmed by Shreya"}
         db.run(c, "UPDATE issues SET status='sending' WHERE id=?", (issue_id,))
-        items = db.all(c, """SELECT i.position, i.topic, i.commentary, a.title, a.url, a.source FROM issue_items i JOIN articles a ON a.id=i.article_id
+        items = db.all(c, """SELECT i.position, i.topic, i.commentary, i.access, i.alt_url, i.alt_source, a.title, a.url, a.source FROM issue_items i JOIN articles a ON a.id=i.article_id
                              WHERE i.issue_id=? AND i.kind='selected' ORDER BY i.position""", (issue_id,))
         todo = db.all(c, """SELECT s.id, s.email, s.token FROM subscribers s LEFT JOIN sends x ON x.subscriber_id=s.id AND x.issue_id=?
                             WHERE s.status='active' AND (x.id IS NULL OR x.status='failed')""", (issue_id,))
