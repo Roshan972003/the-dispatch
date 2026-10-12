@@ -223,6 +223,39 @@ def cluster_trends(cands):
             out.append({"name": cl["name"], "sectors": cl["sectors"][:4], "article_ids": aids, "insight": cl.get("insight", "")})
     return out
 
+KEY_TYPES = ("STARTUP", "COMPANY", "FOUNDER", "INVESTOR")
+
+def recent_entity_keys(c, week):
+    """Companies, founders and investors named in the last four issues' stories (lower-case), for the repeat guard."""
+    rows = db.all(c, """SELECT i.entities FROM issue_items i JOIN issues s ON s.id=i.issue_id
+                        WHERE i.kind='selected' AND s.week IN (SELECT week FROM issues WHERE week < ? ORDER BY week DESC LIMIT ?)""", (week, config.LOOKBACK_ISSUES))
+    out = set()
+    for r in rows:
+        try:
+            out |= {e["name"].strip().lower() for e in json.loads(r["entities"] or "[]") if e["type"] in KEY_TYPES}
+        except Exception:
+            pass
+    return out
+
+def repeat_guard(stories, backs, ents, past_keys):
+    """Swap out any pick that names a company/person already in this issue or in the last four issues, using the best runner-up that does not.
+    Returns (final_stories, remaining_backups, replaced_titles). Keeps the sector spread; if it cannot, it leaves the original picks alone."""
+    keys = lambda sid: {e["name"].strip().lower() for e in ents.get(sid, []) if e["type"] in KEY_TYPES}
+    pool, final, used, replaced = list(backs), [], set(), []
+    for st in stories:
+        ks = keys(st["id"])
+        if ks & used or ks & past_keys:
+            alt = next((b for b in pool if not (keys(b["id"]) & (used | past_keys))), None)
+            if alt:
+                pool.remove(alt); final.append(alt); used |= keys(alt["id"]); replaced.append(st["title"]); continue
+        final.append(st); used |= ks
+    if len({x["topic"] for x in final}) < config.MIN_TOPICS or len(final) < config.PICK_MIN:
+        return stories, backs, []
+    pool = [b for b in pool if not (keys(b["id"]) & (used | past_keys))]      # runner-ups must not be repeats either
+    for n, st in enumerate(final, 1):
+        st["pos"] = n
+    return final, pool, replaced
+
 def _safe(fn, *a):
     try:
         return fn(*a)
@@ -295,15 +328,19 @@ def run_selection(force=False):
     stories = [{**by_id[s["article_id"]], "selection_filter": s["selection_filter"], "topic": s["topic_area"], "why": s["reason"], "pos": n}
                for n, s in enumerate(res["selected"], 1)]
     backs = [{**by_id[b["article_id"]], "selection_filter": b["selection_filter"], "topic": b["topic_area"], "why": b["reason"]} for b in res["backups"] if b["article_id"] in by_id]
+    ents = _safe(extract_entities, stories + backs[:10]) or {}
+    with db.conn() as c:
+        past_keys = recent_entity_keys(c, week)
+    stories, backs, replaced = repeat_guard(stories, backs, ents, past_keys)
     top3 = backs[:3]
     with ThreadPoolExecutor(12) as ex:   # independent Gemini jobs and link checks run together
         fd = [ex.submit(draft_one, sg, s, tuner) for s in stories]
         fb = [ex.submit(draft_one, sg, s, tuner) for s in top3]
-        fs, ft, fe = ex.submit(_safe, score_pool, sg, cands), ex.submit(_safe, cluster_trends, cands), ex.submit(_safe, extract_entities, stories)
+        fs, ft = ex.submit(_safe, score_pool, sg, cands), ex.submit(_safe, cluster_trends, cands)
         fa, fj = ex.submit(_safe, angles, stories), ex.submit(_safe, subject_lines, stories, sg["banned"])
         fx = ex.submit(_safe, access.diagnose_all, stories + backs[:6], pool_all)
         drafts, bdrafts = [f.result() for f in fd], [f.result() for f in fb]
-        scores, trends, ents = fs.result() or {}, ft.result() or [], fe.result() or {}
+        scores, trends = fs.result() or {}, ft.result() or []
         ang, subjects, acc = fa.result() or {"counter": {}, "fusions": []}, fj.result() or [], fx.result() or {}
     notes = (res.get("week_theme") or "") + (f"\nFLAG: {flag}" if flag else "")
     now = config.now_ist().isoformat(timespec="seconds")
@@ -332,4 +369,4 @@ def run_selection(force=False):
         db.log(c, "select", f"issue {iid}: {len(stories)} picks, style v{sg['version']}, flag={flag}")
     return {"week": week, "issue_id": iid, "picks": len(stories), "topics": sorted({s["topic"] for s in stories}),
             "style_version": sg["version"], "selection_flag": flag, "comment_flags": sum(1 for _, e in drafts if e), "scored": len(scores), "trend_clusters": len(trends),
-            "subjects": len(subjects), "access_checked": len(acc)}
+            "subjects": len(subjects), "access_checked": len(acc), "repeats_replaced": replaced}

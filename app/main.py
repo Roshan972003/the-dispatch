@@ -54,17 +54,11 @@ async def telegram_webhook(request: Request):
     return {"ok": True}
 
 # ---------------- subscribers ----------------
-PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The Dispatch</title>
-<style>body{margin:0;background:#fafaf9;color:#1c1917;font:17px/1.6 Georgia,serif}main{max-width:560px;margin:0 auto;padding:12vh 20px}h1{font-size:42px;margin:0 0 8px}
-p{color:#44403c}form{display:flex;gap:8px;flex-wrap:wrap;margin-top:24px}input{flex:1;min-width:220px;padding:12px;font:16px sans-serif;border:1px solid #d6d3d1;border-radius:6px}
-button{padding:12px 20px;font:600 16px sans-serif;background:#1c1917;color:#fff;border:0;border-radius:6px;cursor:pointer}#m{margin-top:14px;font:15px sans-serif}</style></head><body><main>%s</main></body></html>"""
+from app import pages
 
 @app.get("/", response_class=HTMLResponse)
 def landing():
-    return PAGE % ("""<h1>The Dispatch</h1><p>Eight to ten stories on the Indian startup ecosystem, every Thursday, with commentary on what the headline leaves out.</p>
-<form id="f"><input type="email" name="email" placeholder="you@company.com" required><button>Subscribe</button></form><div id="m"></div>
-<script>f.onsubmit=async e=>{e.preventDefault();const r=await fetch('/api/subscribe',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:f.email.value})});
-const j=await r.json();m.textContent=j.message||j.error||'Something went wrong.'}</script>""")
+    return pages.landing()
 
 @app.post("/api/subscribe")
 async def api_subscribe(request: Request):
@@ -74,21 +68,41 @@ async def api_subscribe(request: Request):
 @app.get("/confirm", response_class=HTMLResponse)
 def confirm(t: str):
     from app import mailer
-    s = mailer.set_status_by_token(t, "active")
-    return PAGE % ("<h1>You're in.</h1><p>Welcome to The Dispatch. The next issue lands on Thursday.</p>" if s else "<h1>Link not recognised.</h1>")
+    return pages.confirmed() if mailer.set_status_by_token(t, "active") else HTMLResponse(pages.bad_link(), status_code=404)
 
 @app.get("/unsubscribe", response_class=HTMLResponse)
 def unsubscribe_page(t: str):
-    opts = "".join(f'<label style="display:block;margin:6px 0;font:15px sans-serif"><input type="radio" name="reason" value="{v}"> {v}</label>' for v in
-                   ["Too many emails", "Not relevant to me", "I never signed up", "Other"])
-    return PAGE % (f'<h1>Unsubscribe?</h1><p>You will stop receiving The Dispatch. Optional: tell us why.</p><form method="post" action="/unsubscribe?t={t}" style="display:block">{opts}<button style="margin-top:14px">Yes, unsubscribe</button></form>')
+    return pages.unsub_form(t)
 
 @app.post("/unsubscribe", response_class=HTMLResponse)
 def unsubscribe(t: str, reason: str = Form(None)):
     """Handles both the confirm button and the mail client's one-click List-Unsubscribe POST."""
     from app import mailer
     s = mailer.set_status_by_token(t, "unsubscribed", (reason or None) and reason[:60])
-    return PAGE % ("<h1>You're unsubscribed.</h1><p>Sorry to see you go.</p>" if s else "<h1>Link not recognised.</h1>")
+    return pages.unsubscribed(t) if s else HTMLResponse(pages.bad_link(), status_code=404)
+
+@app.get("/resubscribe", response_class=HTMLResponse)
+def resubscribe(t: str):
+    from app import mailer
+    with db.conn() as c:
+        s = db.one(c, "SELECT status FROM subscribers WHERE token=?", (t,))
+    if not s:
+        return HTMLResponse(pages.bad_link(), status_code=404)
+    if s["status"] == "unsubscribed":
+        mailer.set_status_by_token(t, "active")
+    return pages.resubscribed()
+
+@app.get("/sample", response_class=HTMLResponse)
+def sample():
+    """A sample issue for people deciding whether to subscribe: the latest edition that went out, else the current draft."""
+    from app import mailer
+    with db.conn() as c:
+        issue = db.one(c, "SELECT * FROM issues WHERE status IN ('sending','sent') ORDER BY week DESC LIMIT 1") or db.one(c, "SELECT * FROM issues ORDER BY week DESC LIMIT 1")
+        items = db.all(c, """SELECT i.position, i.topic, i.commentary, i.access, i.alt_url, i.alt_source, a.title, a.url, a.source FROM issue_items i JOIN articles a ON a.id=i.article_id
+                             WHERE i.issue_id=? AND i.kind='selected' ORDER BY i.position""", (issue["id"],)) if issue else []
+    if not items:
+        raise HTTPException(404)
+    return HTMLResponse(mailer.render(issue, items)[1])
 
 # ---------------- Resend webhook (bounces, complaints) ----------------
 @app.post("/api/resend/webhook")
@@ -106,7 +120,7 @@ def archive(week: str):
     """Public web version of an edition. Only editions that were actually emailed are shown."""
     from app import mailer
     with db.conn() as c:
-        issue = db.one(c, "SELECT * FROM issues WHERE week=? AND status='sent'", (week,))
+        issue = db.one(c, "SELECT * FROM issues WHERE week=? AND status IN ('sending','sent')", (week,))
         items = db.all(c, """SELECT i.position, i.topic, i.commentary, i.access, i.alt_url, i.alt_source, a.title, a.url, a.source FROM issue_items i JOIN articles a ON a.id=i.article_id
                              WHERE i.issue_id=? AND i.kind='selected' ORDER BY i.position""", (issue["id"],)) if issue else []
     if not issue:

@@ -14,38 +14,7 @@ def _auth():
     return {"Authorization": f"Bearer {config.RESEND_API_KEY}"}
 
 # ---------------- rendering ----------------
-def send_date(week):
-    """Thursday 08:00 IST of the issue's week."""
-    return datetime.strptime(week, "%Y-%m-%d") + timedelta(days=3, hours=8)
-
-def unsub_url(token):
-    return f"{config.PUBLIC_URL}/unsubscribe?t={token}"
-
-def render(issue, items, token="preview"):
-    date = send_date(issue["week"]).strftime("%-d %b %Y")
-    subject = issue.get("subject") or f"The Dispatch · {date}"
-    pre = issue.get("preheader") or ""
-    rows, text = [], [f"THE DISPATCH · {date}\nIndian startups, with commentary.\n"]
-    for it in items:
-        rows.append(
-            f'<tr><td style="padding:22px 0;border-bottom:1px solid #e7e5e4">'
-            f'<div style="font:600 11px/1 Helvetica,Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#a16207">{h(it["topic"] or "")}</div>'
-            f'<a href="{h(it["url"])}" style="display:block;margin:8px 0 8px;font:700 19px/1.3 Georgia,serif;color:#1c1917;text-decoration:none">{h(it["title"])}</a>'
-            f'<div style="font:15px/1.6 Georgia,serif;color:#292524">{h(it["commentary"] or "")}</div>'
-            f'<div style="margin-top:8px;font:12px Helvetica,Arial,sans-serif;color:#78716c">{h(it["source"])} · <a href="{h(it["url"])}" style="color:#78716c">Read the story</a>'
-            + (f' · behind a paywall? <a href="{h(it["alt_url"])}" style="color:#a16207">Free coverage from {h(it["alt_source"])}</a>' if it.get("alt_url") and it.get("access") in ("soft", "hard", "dead") else '')
-            + '</div></td></tr>')
-        text.append(f'{it["position"]}. {it["title"]} ({it["source"]})\n{it["commentary"]}\n{it["url"]}\n')
-    u = unsub_url(token)
-    html = (f'<!doctype html><html><body style="margin:0;background:#f5f5f4"><span style="display:none;opacity:0;height:0;overflow:hidden">{h(pre)}</span><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">'
-            f'<table role="presentation" width="100%" style="max-width:600px;background:#ffffff;padding:8px 28px 24px">'
-            f'<tr><td style="padding:24px 0 6px"><div style="font:700 28px Georgia,serif;color:#1c1917">The Dispatch</div>'
-            f'<div style="font:13px Helvetica,Arial,sans-serif;color:#78716c;margin-top:4px">{h(date)} · The Indian startup ecosystem, with commentary</div></td></tr>'
-            f'{"".join(rows)}'
-            f'<tr><td style="padding-top:22px;font:12px/1.6 Helvetica,Arial,sans-serif;color:#78716c">You are receiving this because you subscribed to The Dispatch. '
-            f'<a href="{h(u)}" style="color:#78716c">Unsubscribe</a></td></tr></table></td></tr></table></body></html>')
-    text.append(f"Unsubscribe: {u}")
-    return subject, html, "\n".join(text)
+from app.email_template import render, send_date, unsub_url   # the design lives in email_template.py
 
 def _payload(issue, items, sub):
     subject, html, text = render(issue, items, sub["token"])
@@ -142,9 +111,14 @@ def subscribe(email, confirmed=False):
             db.run(c, "INSERT INTO subscribers (email, status, token, created_at, status_changed_at) VALUES (?,?,?,?,?)", (email, status, token, now(), now()))
     if not confirmed and config.RESEND_API_KEY:
         link = f"{config.PUBLIC_URL}/confirm?t={token}"
+        S = "-apple-system,'Segoe UI',Helvetica,Arial,sans-serif"
         send_plain(email, "Confirm your subscription to The Dispatch",
-                   f'<p style="font:16px Georgia,serif">Tap to confirm your subscription to The Dispatch, a weekly note on the Indian startup ecosystem.</p><p><a href="{h(link)}">Confirm subscription</a></p><p style="color:#78716c;font:12px sans-serif">If you did not ask for this, ignore this email.</p>',
-                   f"Confirm your subscription: {link}")
+                   f'<div style="background:#f4f0e6;padding:28px 12px"><div style="max-width:520px;margin:0 auto;background:#fff;border-radius:16px;padding:36px 32px;font-family:{S};color:#1c1917">'
+                   f'<div style="font:700 34px Georgia,serif;text-align:center;margin-bottom:18px">The Dispatch</div>'
+                   f'<p style="font:19px/1.55 Georgia,serif;margin:0 0 20px">One tap and you’re in. Every Thursday: eight to ten Indian startup stories, with Shreya’s sharp take on each.</p>'
+                   f'<p style="text-align:center;margin:26px 0"><a href="{h(link)}" style="background:#1c1917;color:#fff;text-decoration:none;font-weight:600;padding:14px 26px;border-radius:12px;display:inline-block">Confirm my subscription</a></p>'
+                   f'<p style="color:#78716c;font-size:13px;margin:0">If you didn’t ask for this, ignore this email and nothing happens.</p></div></div>',
+                   f"Confirm your subscription to The Dispatch: {link}")
     return {"ok": True, "message": "Check your inbox to confirm." if not confirmed else "Added."}
 
 def set_status_by_token(token, status, reason=None):
