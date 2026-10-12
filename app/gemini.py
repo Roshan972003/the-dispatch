@@ -8,16 +8,18 @@ class LLMUnavailable(Exception):
 
 URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
-def generate(system, prompt, schema=None, temperature=0.4):
-    return generate_parts(system, [{"text": prompt}], schema, temperature)
+def generate(system, prompt, schema=None, temperature=0.4, fast=False):
+    return generate_parts(system, [{"text": prompt}], schema, temperature, fast)
 
-def generate_parts(system, parts, schema=None, temperature=0.4):
+def generate_parts(system, parts, schema=None, temperature=0.4, fast=False):
     """parts: [{"text": ...}] or with audio [{"inline_data": {"mime_type": "audio/ogg", "data": <base64>}}, {"text": ...}]."""
     if not config.GEMINI_API_KEY:
         raise LLMUnavailable("GEMINI_API_KEY is not set")
     body = {"systemInstruction": {"parts": [{"text": system}]},
             "contents": [{"role": "user", "parts": parts}],
             "generationConfig": {"temperature": temperature}}
+    if fast:        # interactive taps: skip the extra reasoning pass (about 4x quicker on the same rewrite). The batch editorial pass keeps full thinking.
+        body["generationConfig"]["thinkingConfig"] = {"thinkingBudget": 0}
     if schema:
         body["generationConfig"]["responseMimeType"] = "application/json"
         body["generationConfig"]["responseSchema"] = schema

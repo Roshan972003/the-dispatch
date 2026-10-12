@@ -444,7 +444,7 @@ async def preview_commentary(request: Request):
         sg = styleguide.active(c)
     if not it:
         raise HTTPException(404)
-    text, errs = select_stories.draft_one(sg, it)
+    text, errs = select_stories.draft_one(sg, it, fast=True)
     return {"ok": True, "commentary": text, "checks": select_stories.voice_checks(text, it["title"], it["snippet"] or "", sg["banned"])}
 
 @router.get("/api/admin/email-preview", response_class=HTMLResponse)
@@ -492,7 +492,7 @@ async def revoice(request: Request):
         sg = styleguide.active(c)
     if not it:
         raise HTTPException(404)
-    text, errs = select_stories.draft_one(sg, it, instruction=instruction)
+    text, errs = select_stories.draft_one(sg, it, instruction=instruction, fast=True)
     return {"ok": True, "commentary": text, "checks": select_stories.voice_checks(text, it["title"], it["snippet"] or "", sg["banned"])}
 
 @router.post("/api/admin/snooze")

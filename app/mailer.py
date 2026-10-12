@@ -72,6 +72,7 @@ def send_issue(issue_id, budget_s=50):
     if left == 0:
         try:
             telegram.say(f"📬 <b>Sent.</b> The Dispatch went to {sent} subscribers" + (f" ({failed} failed)." if failed else "."))
+            telegram.say_group(f"📬 <b>Sent.</b> This edition went out to {sent} subscribers at {config.now_ist().strftime('%-I:%M %p')} IST on {config.now_ist().strftime('%a %-d %b')}.", disable_notification=True)
         except Exception:
             pass
     return {"sent": sent, "failed": failed, "remaining": left}

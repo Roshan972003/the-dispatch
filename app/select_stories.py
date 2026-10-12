@@ -211,7 +211,7 @@ def tuner_text(t):
            else "Length: exactly 3 sentences, using the full claim, mechanism and closer structure.")
     return f"\n\nSHREYA'S TUNING FOR THIS RUN (stay inside the hard rules above):\n- {cyn}\n- {foc}\n- {den}"
 
-def draft_one(sg, story, tuner=None, instruction=""):
+def draft_one(sg, story, tuner=None, instruction="", fast=False):
     system = _system(sg) + tuner_text(tuner or get_tuner())
     body = (story.get("body") or "")[:1800]
     prompt = (f"Story:\n  Title: {story['title']}\n  Source: {story['source']}\n  Snippet: {story['snippet'] or '(none; reason from structure only)'}\n"
@@ -221,7 +221,7 @@ def draft_one(sg, story, tuner=None, instruction=""):
     text, errs = "", []
     for attempt in range(2):
         extra = "" if not errs else "\n\nFailed: " + "; ".join(errs) + ". Rewrite."
-        text = gemini.generate(system, prompt + extra, DRAFT_SCHEMA, 0.7)["commentary"].strip()
+        text = gemini.generate(system, prompt + extra, DRAFT_SCHEMA, 0.7, fast)["commentary"].strip()
         errs = validate_commentary(text, story["title"], (story["snippet"] or "") + " " + body, sg["banned"])
         if not errs:
             break
@@ -295,7 +295,7 @@ def repeat_guard(stories, backs, ents, past_keys):
         st["pos"] = n
     return final, pool, replaced
 
-def fuse(sg, a, b, tuner=None):
+def fuse(sg, a, b, tuner=None, fast=True):
     """Trend-Connecting commentary for two stories: one block that names the link between them. Preview only."""
     system = _system(sg) + tuner_text(tuner or get_tuner())
     block = "\n\n".join(f"Story {n}: {x['title']} ({x['source']})\nSnippet: {x['snippet'] or '(none)'}\nArticle text: {(x.get('source_text') or '')[:900]}" for n, x in ((1, a), (2, b)))
@@ -305,7 +305,7 @@ def fuse(sg, a, b, tuner=None):
     text, errs = "", []
     for _ in range(2):
         extra = "" if not errs else "\n\nFailed: " + "; ".join(errs) + ". Rewrite."
-        text = gemini.generate(system, prompt + extra, DRAFT_SCHEMA, 0.7)["commentary"].strip()
+        text = gemini.generate(system, prompt + extra, DRAFT_SCHEMA, 0.7, fast)["commentary"].strip()
         errs = validate_commentary(text, a["title"] + " " + b["title"], f"{a['snippet'] or ''} {b['snippet'] or ''} {a.get('source_text') or ''} {b.get('source_text') or ''}", sg["banned"])
         if not errs:
             break
@@ -353,7 +353,7 @@ def subject_lines(stories, banned):
 
 VOICE_SCHEMA = {"type": "OBJECT", "properties": {"transcript": {"type": "STRING"}, "commentary": {"type": "STRING"}}, "required": ["transcript", "commentary"]}
 
-def voice_to_commentary(sg, story, audio, mime="audio/ogg", tuner=None):
+def voice_to_commentary(sg, story, audio, mime="audio/ogg", tuner=None, fast=True):
     """Shreya's voice note -> transcript + commentary in her voice. Her spoken opinions are hers to assert, so numbers she says are allowed; nothing else is invented."""
     import base64
     system = _system(sg) + tuner_text(tuner or get_tuner())
@@ -364,7 +364,7 @@ def voice_to_commentary(sg, story, audio, mime="audio/ogg", tuner=None):
     out, errs = {"transcript": "", "commentary": ""}, []
     for _ in range(2):
         extra = [] if not errs else [{"text": "Failed: " + "; ".join(errs) + ". Rewrite the commentary."}]
-        out = gemini.generate_parts(system, parts + extra, VOICE_SCHEMA, 0.6)
+        out = gemini.generate_parts(system, parts + extra, VOICE_SCHEMA, 0.6, fast)
         errs = validate_commentary(out["commentary"].strip(), story["title"], (story["snippet"] or "") + " " + out["transcript"], sg["banned"])
         if not errs:
             break
