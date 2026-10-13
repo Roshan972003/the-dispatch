@@ -17,9 +17,24 @@ def candidates(c, week, limit=90):
             out.append(r); per[r["source"]] = per.get(r["source"], 0) + 1
     return out[:limit]
 
+GLOBAL_SOURCES = ("techcrunch", "rest of world", "hacker news", "gdelt")                      # worldwide feeds: kept only when the story itself is about India
+NOT_PUBLISHERS = ("instagram", "facebook", "youtube", "twitter", "x.com", "reddit", "linkedin", "tiktok", "whatsapp", "telegram", "quora", "pinterest")   # social posts that leak through search aggregators
+INDIA_WORDS = ("india", "indian", "bengaluru", "bangalore", "mumbai", "delhi", "hyderabad", "chennai", "pune", "gurugram", "gurgaon", "noida", "kolkata", "ahmedabad", "rbi", "sebi", "npci", "upi", "rs ", "rs.", "₹", "crore", "lakh", "dpiit", "meity")
+
+def in_scope(a):
+    """Cheap, deterministic scope check before any AI sees the article: the newsletter is about the Indian startup ecosystem."""
+    src = (a["source"] or "").lower()
+    if any(x in src for x in NOT_PUBLISHERS) and src != "added by shreya":
+        return False                                                 # a social post, not reporting
+    if any(x in src for x in GLOBAL_SOURCES):
+        text = f'{a["title"]} {a.get("snippet") or ""}'.lower()
+        return any(w in text for w in INDIA_WORDS)                   # a global outlet only counts when the story is about India
+    return True
+
 def candidates_all(c, week):
-    """Every non-duplicate article of the week (Monday to Wednesday), newest first. No recency cut: Monday's stories compete with Wednesday's."""
-    return db.all(c, "SELECT id, source, title, snippet, url, published_at FROM articles WHERE week=? AND status='new' ORDER BY published_at DESC", (week,))
+    """Every non-duplicate, in-scope article of the week (Monday to Wednesday), newest first. No recency cut: Monday's stories compete with Wednesday's."""
+    rows = db.all(c, "SELECT id, source, title, snippet, url, published_at FROM articles WHERE week=? AND status='new' ORDER BY published_at DESC", (week,))
+    return [a for a in rows if a["source"] == "Added by Shreya" or in_scope(a)]
 
 def recent_titles(c, week):
     rows = db.all(c, """SELECT a.title FROM issue_items i JOIN issues s ON s.id=i.issue_id JOIN articles a ON a.id=i.article_id
@@ -63,7 +78,7 @@ def prescreen(sg, cands):
         cj = "\n".join(f'{a["id"]}|{a["source"]}|{a["title"]}|{(a["snippet"] or "")[:90]}' for a in items)
         res = gemini.generate("You are the editorial selector for The Dispatch. Triage fast.",
             f"FILTERS:\n{sg['filters']}\n\nScore each candidate 0-100 for how strongly it passes at least one filter (counterintuitive, under-reported, trend-connecting). "
-            f"Press releases, routine funding announcements, listicles, restated headlines and anything not about India's startup/tech/business ecosystem score under 30. "
+            f"SCOPE: the newsletter covers the INDIAN STARTUP ECOSYSTEM: startups and their founders, venture and private-equity funding, startup IPOs, new-age tech and consumer-internet companies, and regulation or policy that directly affects startups (SEBI, RBI, DPIIT, MeitY, tax or labour rules aimed at them). Stories about large legacy conglomerates (Reliance, Tata, Adani and similar), general economy, GST or tax news with no startup angle, retail or auto results, big-tech moves abroad, and anything outside India score under 25. Press releases, routine funding announcements, listicles and restated headlines score under 30. "
             f"Lines are id|source|headline|snippet. Return every id.\n{cj}", PRESCREEN_SCHEMA, 0.1)
         return {x["id"]: max(0, min(100, int(x["s"]))) for x in res.get("scores", [])}
     parts = [cands[i::10] for i in range(10)]        # ~60 headlines per call: small enough to answer fast and reliably
@@ -95,6 +110,8 @@ def select(sg, cands, recent):
             "- are not about a company-event already listed in RECENT_ISSUES\n"
             "- are high signal relative to this week's batch (reject press releases, pure funding announcements and restated headlines)\n"
             "- are not two stories about the same event\n"
+            "- are about the INDIAN STARTUP ECOSYSTEM: startups, founders, venture/PE funding, startup IPOs, new-age tech companies, or policy that directly affects startups. "
+            "Reject stories about large legacy conglomerates, general economy or tax news with no startup angle, and anything outside India. At least 8 of the stories must be squarely about startups or startup funding/policy\n"
             "- candidates whose source is 'Added by Shreya' were hand-picked by her this week: include them unless they break these rules (already covered recently, or not about India's startup ecosystem)\n\n"
             f"FILTERS:\n{sg['filters']}\n\nRECENT_ISSUES (do not repeat these stories or events):\n" + ("\n".join("- " + t for t in recent) or "(none yet)") +
             f"\n\nCANDIDATES:\n{cj}\n\nOrder 'selected' by editorial strength. 'backups': 6 ranked replacements for the Swap button, ideally from topics under-represented in 'selected'. "
