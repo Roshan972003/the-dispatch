@@ -382,9 +382,11 @@ def scope_check(items):
 
 def scope_guard(stories, backs):
     """Swap any pick that is not squarely Indian startup ecosystem for the next runner-up that is. Keeps count and the 3-topic spread. -> (stories, backs, swapped)."""
-    verdict = scope_check(stories + backs[:10])
-    if not verdict:
+    items = stories + backs[:10]
+    v1, v2 = scope_check(items), scope_check(list(reversed(items)))          # two independent passes in different order: a story stays only if BOTH say it is in scope
+    if not v1 and not v2:
         return stories, backs, []
+    verdict = {a["id"]: v1.get(a["id"], True) and v2.get(a["id"], True) for a in items}
     pool, out, swapped = [b for b in backs if verdict.get(b["id"], True)], [], []
     spare = [b for b in backs if not verdict.get(b["id"], True)]
     for st in stories:
