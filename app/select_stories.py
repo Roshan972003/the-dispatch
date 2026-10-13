@@ -17,24 +17,12 @@ def candidates(c, week, limit=90):
             out.append(r); per[r["source"]] = per.get(r["source"], 0) + 1
     return out[:limit]
 
-GLOBAL_SOURCES = ("techcrunch", "rest of world", "hacker news", "gdelt")                      # worldwide feeds: kept only when the story itself is about India
-NOT_PUBLISHERS = ("instagram", "facebook", "youtube", "twitter", "x.com", "reddit", "linkedin", "tiktok", "whatsapp", "telegram", "quora", "pinterest")   # social posts that leak through search aggregators
-INDIA_WORDS = ("india", "indian", "bengaluru", "bangalore", "mumbai", "delhi", "hyderabad", "chennai", "pune", "gurugram", "gurgaon", "noida", "kolkata", "ahmedabad", "rbi", "sebi", "npci", "upi", "rs ", "rs.", "₹", "crore", "lakh", "dpiit", "meity")
-
-def in_scope(a):
-    """Cheap, deterministic scope check before any AI sees the article: the newsletter is about the Indian startup ecosystem."""
-    src = (a["source"] or "").lower()
-    if any(x in src for x in NOT_PUBLISHERS) and src != "added by shreya":
-        return False                                                 # a social post, not reporting
-    if any(x in src for x in GLOBAL_SOURCES):
-        text = f'{a["title"]} {a.get("snippet") or ""}'.lower()
-        return any(w in text for w in INDIA_WORDS)                   # a global outlet only counts when the story is about India
-    return True
+from app.ingest_util import in_scope
 
 def candidates_all(c, week):
     """Every non-duplicate, in-scope article of the week (Monday to Wednesday), newest first. No recency cut: Monday's stories compete with Wednesday's."""
     rows = db.all(c, "SELECT id, source, title, snippet, url, published_at FROM articles WHERE week=? AND status='new' ORDER BY published_at DESC", (week,))
-    return [a for a in rows if a["source"] == "Added by Shreya" or in_scope(a)]
+    return [a for a in rows if in_scope(a)]
 
 def recent_titles(c, week):
     rows = db.all(c, """SELECT a.title FROM issue_items i JOIN issues s ON s.id=i.issue_id JOIN articles a ON a.id=i.article_id
@@ -380,6 +368,39 @@ def fuse(sg, a, b, tuner=None, fast=True):
             break
     return text, errs
 
+SCOPE_SCHEMA = {"type": "OBJECT", "properties": {"verdicts": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
+    "id": {"type": "INTEGER"}, "ok": {"type": "BOOLEAN"}, "why": {"type": "STRING"}}, "required": ["id", "ok"]}}}, "required": ["verdicts"]}
+
+def scope_check(items):
+    """Independent Gemini check: is each story squarely about the Indian startup ecosystem? -> {id: bool}. Fails open (an outage must not block a draft)."""
+    cj = "\n".join(f'{a["id"]}|{a["source"]}|{a["title"]}|{(a.get("snippet") or "")[:200]}' for a in items)
+    res = _safe(gemini.generate, "You are a strict scope editor for The Dispatch, a newsletter on the Indian startup ecosystem.",
+        "A story is IN SCOPE only if it is about Indian startups and founders, venture or private-equity funding of Indian companies, startup IPOs, new-age tech or consumer-internet "
+        "companies in India, or policy that directly affects startups. It is OUT of scope if it is mainly about a large legacy conglomerate, general economy, GST or tax news with no startup angle, "
+        "listed-company quarterly results, big tech abroad, or a company outside India. Lines are id|source|headline|snippet. Return a verdict for every id.\n" + cj, SCOPE_SCHEMA, 0.0)
+    return {v["id"]: bool(v["ok"]) for v in (res or {}).get("verdicts", [])}
+
+def scope_guard(stories, backs):
+    """Swap any pick that is not squarely Indian startup ecosystem for the next runner-up that is. Keeps count and the 3-topic spread. -> (stories, backs, swapped)."""
+    verdict = scope_check(stories + backs[:10])
+    if not verdict:
+        return stories, backs, []
+    pool, out, swapped = [b for b in backs if verdict.get(b["id"], True)], [], []
+    spare = [b for b in backs if not verdict.get(b["id"], True)]
+    for st in stories:
+        if verdict.get(st["id"], True):
+            out.append(st); continue
+        alt = pool.pop(0) if pool else None
+        if alt:
+            out.append(alt); swapped.append({"title": st["title"], "reason": "is not squarely about the Indian startup ecosystem"})
+        else:
+            out.append(st)
+    if len({x["topic"] for x in out}) < config.MIN_TOPICS:
+        return stories, backs, []
+    for n, st in enumerate(out, 1):
+        st["pos"] = n
+    return out, pool + spare, swapped
+
 def paywall_guard(stories, backs, acc, ents, past_keys):
     """Subscribers hate clicking into a wall. Swap out any pick behind a HARD paywall that has no free coverage for the best free runner-up
     (one that does not repeat a company), keeping the count and the 3-sector spread. Returns (stories, backs, swapped=[{title, reason}])."""
@@ -498,7 +519,11 @@ def run_selection(force=False):
     ents = _safe(extract_entities, stories + backs[:10]) or {}; lap('entities')
     with db.conn() as c:
         past_keys = recent_entity_keys(c, week)
+    stories, backs, off_scope = scope_guard(stories, backs)
+    if off_scope:
+        ents = _safe(extract_entities, stories + backs[:10]) or ents
     stories, backs, replaced = repeat_guard(stories, backs, ents, past_keys)
+    replaced = off_scope + replaced
     acc = _safe(access.diagnose_all, stories + backs[:8], pool_all) or {}        # which links open freely? done before the final pick so a wall can be avoided
     stories, backs, walled = paywall_guard(stories, backs, acc, ents, past_keys)
     replaced = replaced + walled

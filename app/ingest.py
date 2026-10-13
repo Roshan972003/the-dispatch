@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 import httpx, feedparser
 from app import config, db
+from app.ingest_util import in_scope
 
 DEFAULT_FEEDS = [
     ("Inc42", "https://inc42.com/feed/"),
@@ -17,7 +18,6 @@ DEFAULT_FEEDS = [
     ("Entrackr", "https://entrackr.com/rss"),
     ("Economic Times Startups", "https://economictimes.indiatimes.com/small-biz/startups/rssfeeds/11993050.cms"),
     ("Economic Times Tech", "https://economictimes.indiatimes.com/tech/rssfeeds/13357270.cms"),
-    ("TechCrunch", "https://techcrunch.com/feed/"),
     ("Medianama", "https://www.medianama.com/feed/"),
     ("The Hindu BusinessLine", "https://www.thehindubusinessline.com/companies/feeder/default.rss"),
     ("Livemint Companies", "https://www.livemint.com/rss/companies"),
@@ -25,9 +25,9 @@ DEFAULT_FEEDS = [
     ("The Ken", "https://the-ken.com/feed/"),
     ("The Arc", "https://thearcweb.com/rss"),
     ("Indian Express Tech", "https://indianexpress.com/section/technology/feed/"),
-    ("Rest of World", "https://restofworld.org/feed/"),
 ]
-BROKEN_FEEDS = ["https://entrackr.com/feed", "https://www.moneycontrol.com/rss/startup.xml", "https://www.business-standard.com/rss/companies-101.rss",
+BROKEN_FEEDS = ["https://techcrunch.com/feed/", "https://restofworld.org/feed/",     # worldwide feeds switched off: the newsletter is India-only
+                "https://entrackr.com/feed", "https://www.moneycontrol.com/rss/startup.xml", "https://www.business-standard.com/rss/companies-101.rss",
                 "https://www.vccircle.com/feed", "https://analyticsindiamag.com/feed/", "https://tracxn.com/d/blog/rss.xml",
                 "https://www.thehindubusinessline.com/companies/feeder/default.rss.OLD"]
 STOP = set("a an the of in on at to for and or with as by from is are was were be its it this that new says say after over into amid".split())
@@ -134,7 +134,10 @@ def run_ingest():
               "sources_empty": [k for k, v in report.items() if v == 0], "per_source": {k: v for k, v in report.items() if isinstance(v, int) and v}}
     result["sources_ok"] = len(result["per_source"])
     with db.conn() as c:
+        n_all = len(items)
+        items = [a for a in items if in_scope(a)]          # India startup ecosystem only: global feeds and social posts never enter the pool
         stats = store(c, items, week)
+        stats["out_of_scope"] = n_all - len(items)
         result.update(stats)
         import json
         db.kv_set(c, "last_ingest", json.dumps({**result, "at": config.now_ist().isoformat(timespec="seconds")}))

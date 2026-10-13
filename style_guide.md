@@ -12,6 +12,12 @@ Shreya does not aggregate headlines. The newsletter's value is her **selection**
 
 Her readers are founders, investors and operators in India's startup ecosystem. They are busy, sceptical and allergic to hype.
 
+### Scope: the Indian startup ecosystem only
+
+Everything in The Dispatch is about **the Indian startup ecosystem**: Indian startups and their founders, venture and private-equity funding of Indian companies, startup IPOs, new-age tech and consumer-internet companies in India, and policy or regulation that directly affects startups (SEBI, RBI, DPIIT, MeitY, tax or labour rules aimed at them).
+
+Out of scope, however interesting: large legacy conglomerates, general economy and GST or tax news with no startup angle, listed-company quarterly results, big tech abroad, and anything about companies outside India. At least 8 of the 10 stories must be squarely about startups or startup funding and policy. This is enforced in code (ingestion filter, pre-screen, pick, and an independent scope check), not only in this prompt.
+
 ### The three selection filters
 
 A story must pass at least one:

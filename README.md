@@ -16,7 +16,7 @@ An automated pipeline for **The Dispatch**, Shreya's weekly newsletter on the In
 ## The weekly flow
 
 ```
-Mon-Wed 8:00 AM IST   ingest 14 live RSS feeds + 13 Google News searches + NewsAPI, GNews and NewsData queries (+ GDELT, Hacker News), de-duplicate, store in Neon
+Mon-Wed 8:00 AM IST   ingest 14 live RSS feeds + 13 Google News searches + NewsAPI, GNews and NewsData queries (+ GDELT), keep only Indian-startup-ecosystem news, de-duplicate, store in Neon
 Wed     2:00 PM IST   Gemini pre-screens every headline, picks 10 stories across 3+ sectors, drafts each take in Shreya's voice
 Wed     afternoon     the draft lands in Telegram: Keep / Swap / Edit / Voice / Angles on every story card
 Wed    10:00 PM IST   still unconfirmed? a loud, pinned reminder with "Confirm" and "Push deadline" buttons
@@ -31,6 +31,7 @@ Nothing is ever emailed without her explicit, two-step confirmation (see *Safegu
 |---|---|
 | Runs Monday to Wednesday, ingesting multiple RSS feeds and news API queries | [`vercel.json`](vercel.json) cron `30 2 * * 1-3` (08:00 IST) → [`app/ingest.py`](app/ingest.py), [`app/sources.py`](app/sources.py) |
 | Stores each article; no duplicates within a week or across the previous four weeks' newsletters | URL hash unique; headline similarity within the week and against the last four issues ([`ingest.store`](app/ingest.py)); a company/founder repeat guard at selection ([`select_stories.repeat_guard`](app/select_stories.py)) |
+| **Scope: only Indian startup ecosystem news** (the newsletter's subject) | Four layers: global feeds (TechCrunch, Rest of World, Hacker News) removed and social posts dropped at ingestion ([`ingest_util.in_scope`](app/ingest_util.py)); a stricter pre-screen; a stricter pick prompt (8 of 10 squarely about startups); and an independent scope check that swaps any off-topic pick for the next runner-up ([`scope_guard`](app/select_stories.py)) |
 | Wednesday afternoon, Gemini picks 8 to 10 stories: high signal vs this week's batch, not in the last four newsletters, spanning at least three topics | [`select_stories.py`](app/select_stories.py): whole-week pre-screen, shortlist, selection with code-level validation (count, topic spread, real ids, no duplicates), retry then repair |
 | Commentary in Shreya's documented editorial voice, stored as a style guide | [`style_guide.md`](style_guide.md) → versioned `style_guide` table ([`app/styleguide.py`](app/styleguide.py)); every draft is checked against her hard rules |
 | Draft delivered via Telegram by Wednesday evening; she reviews, edits, approves or swaps stories individually | [`app/telegram.py`](app/telegram.py): per-story Keep, Swap (3 pre-drafted options), Edit, Voice, Angles |

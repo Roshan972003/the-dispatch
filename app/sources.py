@@ -112,7 +112,7 @@ def plan(feeds):
     """[(label, fn, args)] covering every configured source."""
     jobs = [(f"rss:{f['name']}", rss, (f["name"], f["url"])) for f in feeds]
     jobs += [(f"google:{q}", google_news, (q,)) for q in GOOGLE_QUERIES]
-    jobs += [("hackernews", hacker_news, ()), ("gdelt", gdelt, ())]
+    jobs += [("gdelt", gdelt, ())]                           # Hacker News removed: global tech chatter, not the Indian startup ecosystem
     for q in NEWS_QUERIES:
         jobs += [(f"newsapi:{q}", newsapi, (q,))]
     jobs += [("gnews", gnews_all, (NEWS_QUERIES[:4],))]     # keep keyed free tiers (GNews 100/day, NewsData 200/day) well under their limits
