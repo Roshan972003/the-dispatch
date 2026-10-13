@@ -380,6 +380,29 @@ def scope_check(items):
         "listed-company quarterly results, big tech abroad, or a company outside India. Lines are id|source|headline|snippet. Return a verdict for every id.\n" + cj, SCOPE_SCHEMA, 0.0)
     return {v["id"]: bool(v["ok"]) for v in (res or {}).get("verdicts", [])}
 
+def mark_scope(c, week, limit=900):
+    """Ingestion-time scope check: every newly stored article is classified once; anything not squarely about the Indian startup ecosystem is set aside
+    (status 'out_of_scope') so it never reaches scoring, the shortlist, the runner-ups or the headline counts. Fails open per chunk."""
+    from concurrent.futures import ThreadPoolExecutor
+    rows = [dict(r) for r in db.all(c, "SELECT id, source, title, snippet FROM articles WHERE week=? AND status='new' AND COALESCE(scope_checked,0)=0 LIMIT ?", (week, limit))]
+    if not rows:
+        return {"checked": 0, "out_of_scope": 0}
+    chunks = [rows[i:i + 60] for i in range(0, len(rows), 60)]
+    with ThreadPoolExecutor(6) as ex:
+        results = list(ex.map(lambda ch: (ch, scope_check(ch)), chunks))
+    drop, keep = [], []
+    for ch, verdict in results:
+        if not verdict:
+            continue                                               # a failed chunk stays unchecked and is retried next run
+        for a in ch:
+            (drop if (a["source"] != "Added by Shreya" and verdict.get(a["id"], True) is False) else keep).append(a["id"])
+    for ids, sql in ((drop, "UPDATE articles SET status='out_of_scope', scope_checked=1 WHERE id IN ({})"), (keep, "UPDATE articles SET scope_checked=1 WHERE id IN ({})")):
+        for i in range(0, len(ids), 200):                           # a few batched statements, not one round trip per article
+            part = ids[i:i + 200]
+            db.run(c, sql.format(",".join("?" * len(part))), tuple(part))
+    out, checked = len(drop), len(drop) + len(keep)
+    return {"checked": checked, "out_of_scope": out}
+
 def scope_guard(stories, backs):
     """Swap any pick that is not squarely Indian startup ecosystem for the next runner-up that is. Keeps count and the 3-topic spread. -> (stories, backs, swapped)."""
     items = stories + backs[:10]
@@ -401,7 +424,7 @@ def scope_guard(stories, backs):
         return stories, backs, []
     for n, st in enumerate(out, 1):
         st["pos"] = n
-    return out, pool + spare, swapped
+    return out, (pool if len(pool) >= 3 else pool + spare), swapped
 
 def paywall_guard(stories, backs, acc, ents, past_keys):
     """Subscribers hate clicking into a wall. Swap out any pick behind a HARD paywall that has no free coverage for the best free runner-up

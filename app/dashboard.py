@@ -64,7 +64,7 @@ def _q_articles(week):
         total = db.one(c, "SELECT COUNT(*) AS n FROM articles")["n"]
         dd = db.one(c, "SELECT SUM(CASE WHEN dup_of IS NOT NULL THEN 1 ELSE 0 END) AS in_week, SUM(CASE WHEN dup_of IS NULL THEN 1 ELSE 0 END) AS past FROM articles WHERE week=? AND status='dup'", (week,))
         counts["_dup_in_week"], counts["_dup_past"] = dd["in_week"] or 0, dd["past"] or 0
-        sc = db.one(c, "SELECT SUM(CASE WHEN signal IS NOT NULL THEN 1 ELSE 0 END) AS scored, SUM(CASE WHEN signal_filter IS NOT NULL THEN 1 ELSE 0 END) AS short, SUM(CASE WHEN signal_filter IS NOT NULL AND signal>=60 THEN 1 ELSE 0 END) AS strong FROM articles WHERE week=? AND status<>'dup'", (week,))
+        sc = db.one(c, "SELECT SUM(CASE WHEN signal IS NOT NULL THEN 1 ELSE 0 END) AS scored, SUM(CASE WHEN signal_filter IS NOT NULL THEN 1 ELSE 0 END) AS short, SUM(CASE WHEN signal_filter IS NOT NULL AND signal>=60 THEN 1 ELSE 0 END) AS strong FROM articles WHERE week=? AND status NOT IN ('dup','out_of_scope')", (week,))
         counts["_scored"], counts["_strong"], counts["_short"] = sc["scored"] or 0, sc["strong"] or 0, sc["short"] or 0
     return arts, counts, total
 
@@ -303,6 +303,8 @@ def state(fresh=False):
             else:
                 m = next((p for p in past_pairs if _sim(a.get("fingerprint") or "", p[2])), None)
                 a["reason"] = f"Already covered: matches \u201c{m[0][:70]}\u201d from the {m[1]} issue." if m else "Matches a story from the last four issues."
+        elif a["status"] == "out_of_scope":
+            a["reason"] = "Set aside: not squarely about the Indian startup ecosystem (general business or tech news, or not about India)."
         elif a["status"] == "selected":
             a["reason"] = "Picked for this issue."
         elif a["title"] in dropped:
@@ -326,9 +328,10 @@ def state(fresh=False):
     for row in list(arts) + list(items):          # shown as "you" on screen; the stored value stays "Added by Shreya" because the selector keys on it
         if row.get("source") == "Added by Shreya":
             row["source"] = "Added by you"
-    uniq = n_total - counts.get("dup", 0)
+    oos = counts.get("out_of_scope", 0)
+    uniq = n_total - counts.get("dup", 0) - oos
     funnel = [{"label": "Articles collected", "n": n_total, "note": "Everything read this week from Indian RSS feeds and news searches, filtered to the Indian startup ecosystem."},
-              {"label": "After removing repeats", "n": uniq, "note": f"{counts.get('dup', 0)} repeats removed: {dup_in_week} were the same story as another this week, {dup_past} were already in the last four issues."},
+              {"label": "Indian startup news, no repeats", "n": uniq, "note": f"{oos} general or non-Indian stories set aside, and {counts.get('dup', 0)} repeats removed ({dup_in_week} the same story as another this week, {dup_past} already in the last four issues)."},
               {"label": "Scored by Gemini", "n": n_scored, "note": "Each story gets a 0 to 100 score for how useful it is to your readers" + (f" ({uniq - n_scored} not scored: added after scoring or could not be rated)." if uniq > n_scored else ".")},
               {"label": "Shortlisted", "n": n_short, "note": f"The top {n_short} by score (at most 14 per source) go forward to the final pick. {n_strong} of them scored 60 or more."},
               {"label": "In this week\u2019s issue", "n": len(sel), "note": "Gemini picks the final stories across at least three topics" + (f"; the safeguards swapped out {len(extras.get('repeat_dropped', []))} (repeats, off-topic or paywalled)." if extras.get("repeat_dropped") else ".")}]

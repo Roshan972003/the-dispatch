@@ -49,7 +49,7 @@ PG_SCHEMA = SCHEMA.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY 
 
 MIGRATIONS = [("articles", "signal", "INTEGER"), ("articles", "signal_filter", "TEXT"), ("issue_items", "entities", "TEXT"), ("subscribers", "unsub_reason", "TEXT"), ("subscribers", "name", "TEXT"), ("issue_items", "source_text", "TEXT"), ("issue_items", "quotes", "TEXT"),
               ("issue_items", "counter", "TEXT"), ("issue_items", "access", "TEXT"), ("issue_items", "alt_url", "TEXT"), ("issue_items", "alt_source", "TEXT"),
-              ("issues", "subject_options", "TEXT"), ("issues", "subject", "TEXT"), ("issues", "preheader", "TEXT"), ("issues", "fusions", "TEXT")]   # columns added after first release
+              ("issues", "subject_options", "TEXT"), ("issues", "subject", "TEXT"), ("issues", "preheader", "TEXT"), ("issues", "fusions", "TEXT"), ("articles", "scope_checked", "INTEGER DEFAULT 0")]   # columns added after first release
 import threading
 _SETUP_LOCK = threading.Lock()
 _READY = False

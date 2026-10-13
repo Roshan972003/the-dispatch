@@ -140,6 +140,11 @@ def run_ingest():
         stats["out_of_scope"] = n_all - len(items)
         result.update(stats)
         import json
+        try:
+            from app import select_stories
+            result["scope"] = select_stories.mark_scope(c, week)
+        except Exception as e:
+            result["scope"] = {"error": str(e)[:80]}
         db.kv_set(c, "last_ingest", json.dumps({**result, "at": config.now_ist().isoformat(timespec="seconds")}))
         db.log(c, "ingest", f"{stats}")
     return result

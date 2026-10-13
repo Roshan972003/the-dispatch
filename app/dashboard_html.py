@@ -221,7 +221,7 @@ const TABS=[['command','Overview'],['curation','Review the draft'],['intelligenc
 const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const when=iso=>{if(!iso)return '—';const d=new Date(iso.length<=16?iso+':00':iso);return isNaN(d)?iso:DAYS[d.getDay()]+' '+d.toLocaleTimeString('en-IN',{hour:'numeric',minute:'2-digit',hour12:true})+' · '+d.getDate()+' '+d.toLocaleString('en-IN',{month:'short'})};
 const short=iso=>iso?iso.replace('T',' ').slice(5,16):'—';
-const badge=s=>({new:['info','candidate'],selected:['ok','selected'],dup:['warn','duplicate'],active:['ok','active'],pending:['info','pending'],unsubscribed:['','unsubscribed'],bounced:['bad','bounced'],complained:['bad','complained'],drafted:['warn','awaiting you'],approved:['ok','confirmed'],sending:['info','sending'],sent:['ok','sent'],collecting:['info','collecting']}[s]||['',s]);
+const badge=s=>({new:['info','candidate'],selected:['ok','selected'],dup:['warn','duplicate'],out_of_scope:['','out of scope'],active:['ok','active'],pending:['info','pending'],unsubscribed:['','unsubscribed'],bounced:['bad','bounced'],complained:['bad','complained'],drafted:['warn','awaiting you'],approved:['ok','confirmed'],sending:['info','sending'],sent:['ok','sent'],collecting:['info','collecting']}[s]||['',s]);
 const pill=s=>{const[c,l]=badge(s);return `<span class="pill ${c}">${esc(l)}</span>`};
 const bars=(rows,max)=>{max=max||Math.max(1,...rows.map(r=>r[1]));return `<div class="bars">`+rows.map(([n,v])=>`<div class="br"><span class="nm" title="${esc(n)}">${esc(n)}</span><span class="tr"><i class="fi" style="width:${Math.max(3,v/max*100)}%"></i></span><span class="ct">${v}</span></div>`).join('')+`</div>`};
 const kpi=(v,l,d)=>`<div class="card kpi"><div class="v">${v}</div><div class="l">${l}</div>${d?`<div class="d">${d}</div>`:''}</div>`;
@@ -271,8 +271,8 @@ function sigRing(v){const c=v==null?'var(--mut)':v>=70?'var(--acc)':'var(--mut)'
   return `<svg class="ring" viewBox="0 0 74 74"><circle cx="37" cy="37" r="${r}" fill="none" stroke="var(--soft)" stroke-width="7"/><circle cx="37" cy="37" r="${r}" fill="none" stroke="${c}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${L*p/100} ${L}" transform="rotate(-90 37 37)"/><text x="37" y="42" text-anchor="middle" font-size="17" font-family="var(--serif)" fill="var(--ink)">${v==null?'—':v}</text></svg>`}
 
 function funnel(){
-  const F=S.funnel,short={0:'Articles read',1:'Unique stories',2:'Rated by Gemini',3:'Shortlist',4:'Your issue'},
-   line=[`Everything collected this week`,`After removing repeats`,`Each one scored 0 to 100 for usefulness`,`The highest-scoring stories`,`The final stories you review`];
+  const F=S.funnel,short={0:'Articles read',1:'Startup news, no repeats',2:'Rated by Gemini',3:'Shortlist',4:'Your issue'},
+   line=[`Everything collected this week`,`Indian startup ecosystem only, repeats removed`,`Each one scored 0 to 100 for usefulness`,`The highest-scoring stories`,`The final stories you review`];
   return `<div class="flow">`+F.map((f,i)=>{const lost=i?F[i-1].n-f.n:0;return `${i?`<div class="fa"><span>${lost>0?'−'+lost:''}</span>→</div>`:''}<div class="fc ${i===F.length-1?'last':''}"><div class="fn">${f.n}</div><div class="ft">${short[i]||esc(f.label)}</div><div class="fd">${line[i]}</div></div>`}).join('')+`</div>
    <details class="dv" style="margin-top:18px"><summary>See exactly what happened at each step</summary><ul>${F.map(f=>`<li><b>${esc(f.label)} (${f.n}).</b> ${esc(f.note)}</li>`).join('')}</ul></details>`;
 }
@@ -459,7 +459,7 @@ function articles(){
   if(F.sort==='signal')rows=[...rows].sort((a,b)=>(b.signal??-1)-(a.signal??-1));
   const tot=rows.length;rows=rows.slice(0,F.limit);const c={all:S.articles.length};S.articles.forEach(a=>c[a.status]=(c[a.status]||0)+1);
   return `<div class="card"><h2>Signal-to-noise live feed</h2><p class="sub">${S.articles.length<S.kpis.articles_week?`Showing ${S.articles.length} of ${S.kpis.articles_week} articles stored this week`:'Every article stored this week'}, rated 0–100 by Gemini for editorial signal. ${S.scored} of ${S.articles.length} scored. Duplicates are kept for the audit trail.</p>
-  <div class="tools">${F.filter||F.topic?`<button class="act sm" id="clrf">Clear filter: ${esc(F.filter||F.topic)} ✕</button>`:''}<input id="q" placeholder="Search…" value="${esc(F.q)}"><select id="fs"><option value="all">All statuses (${c.all})</option>${['new','selected','dup'].map(s=>`<option value="${s}" ${F.status===s?'selected':''}>${badge(s)[1]} (${c[s]||0})</option>`).join('')}</select>
+  <div class="tools">${F.filter||F.topic?`<button class="act sm" id="clrf">Clear filter: ${esc(F.filter||F.topic)} ✕</button>`:''}<input id="q" placeholder="Search…" value="${esc(F.q)}"><select id="fs"><option value="all">All statuses (${c.all})</option>${['new','selected','dup','out_of_scope'].map(s=>`<option value="${s}" ${F.status===s?'selected':''}>${badge(s)[1]} (${c[s]||0})</option>`).join('')}</select>
    <select id="fsrc"><option value="all">All sources</option>${srcs.map(s=>`<option ${F.source===s?'selected':''}>${esc(s)}</option>`).join('')}</select><select id="fsort"><option value="time" ${F.sort==='time'?'selected':''}>Newest first</option><option value="signal" ${F.sort==='signal'?'selected':''}>Highest signal first</option></select></div>
   <div class="tw"><table><thead><tr><th>Headline</th><th>Source</th><th>Signal</th><th>Status</th><th>Published</th></tr></thead><tbody>
   ${rows.map(a=>`<tr><td class="ti"><a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title)}</a><div class="why-d">${esc(a.reason||'')}</div></td><td>${esc(a.source)}</td>
